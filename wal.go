@@ -75,9 +75,12 @@ func (wal *WAL) Remove() {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
 
-	wal.closed = true
-	wal.fd.Close()
-	os.Remove(wal.fd.Name())
+	if !wal.closed {
+		wal.closed = true
+		_ = wal.fd.Close()
+	}
+
+	_ = os.Remove(wal.fd.Name())
 }
 
 func (wal *WAL) Close() error {
