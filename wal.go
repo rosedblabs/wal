@@ -2,6 +2,7 @@ package wal
 
 import (
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"os"
 	"sync"
@@ -28,12 +29,17 @@ const (
 	fileModePerm = 0644
 )
 
+var (
+	ErrClosed = errors.New("the wal is closed")
+)
+
 // WAL Write Ahead Log instance.
 type WAL struct {
 	fd                 *os.File
 	currentBlockNumber uint32
 	currentBlockSize   uint32
 	mu                 *sync.RWMutex
+	closed             bool
 }
 
 type ChunkStartPosition struct {
@@ -58,18 +64,44 @@ func Open(fileName string) (*WAL, error) {
 func (wal *WAL) Sync() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
+
+	if wal.closed {
+		return nil
+	}
 	return wal.fd.Sync()
+}
+
+func (wal *WAL) Remove() {
+	wal.mu.Lock()
+	defer wal.mu.Unlock()
+
+	if !wal.closed {
+		wal.closed = true
+		_ = wal.fd.Close()
+	}
+
+	_ = os.Remove(wal.fd.Name())
 }
 
 func (wal *WAL) Close() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
+
+	if wal.closed {
+		return nil
+	}
+
+	wal.closed = true
 	return wal.fd.Close()
 }
 
 func (wal *WAL) Write(data []byte) (*ChunkStartPosition, error) {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
+
+	if wal.closed {
+		return nil, ErrClosed
+	}
 
 	// The left block space is not enough for a chunk header
 	if wal.currentBlockSize+chunkHeaderSize >= blockSize {
@@ -176,6 +208,11 @@ func (wal *WAL) writeInternal(data []byte, chunkType ChunkType) error {
 func (wal *WAL) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
+
+	if wal.closed {
+		return nil, ErrClosed
+	}
+
 	stat, err := wal.fd.Stat()
 	if err != nil {
 		return nil, err
