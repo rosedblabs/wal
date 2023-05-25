@@ -1,6 +1,10 @@
 # wal
 **[WIP] Write Ahead Log for Go applications.**
 
+## Design Overview
+
+![https://pica.zhimg.com/80/v2-9314b84c1c96d13638c5924087399644_1440w.png?source=d16d100b](https://pica.zhimg.com/80/v2-9314b84c1c96d13638c5924087399644_1440w.png?source=d16d100b)
+
 ## Format
 
 **Format of the WAL file:**
