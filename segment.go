@@ -3,17 +3,23 @@ package wal
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"os"
 )
 
 type ChunkType = byte
+type SegmentID = uint32
 
 const (
 	ChunkTypeFull ChunkType = iota
 	ChunkTypeFirst
 	ChunkTypeMiddle
 	ChunkTypeLast
+)
+
+var (
+	ErrClosed = errors.New("the segment file is closed")
 )
 
 const (
@@ -26,34 +32,38 @@ const (
 	blockSize = 32 * 1024
 
 	fileModePerm = 0644
-)
 
-var (
-	ErrClosed = errors.New("the wal is closed")
+	segmentFileSuffix = ".seg"
 )
 
 type Segment struct {
+	id                 SegmentID
 	fd                 *os.File
 	currentBlockNumber uint32
 	currentBlockSize   uint32
+	offset             int64
 	closed             bool
 }
 
-type ChunkStartPosition struct {
+type ChunkPosition struct {
+	SegmentId   SegmentID
 	BlockNumber uint32
 	ChunkOffset int64
 }
 
 // Open a new segment file.
-func OpenSegmentFile(fileName string) (*Segment, error) {
+func OpenSegmentFile(dirPath string, id uint32) (*Segment, error) {
+	fileName := fmt.Sprintf("%09d"+segmentFileSuffix, id)
 	fd, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR|os.O_APPEND, fileModePerm)
 	if err != nil {
 		return nil, err
 	}
 	return &Segment{
+		id:                 id,
 		fd:                 fd,
 		currentBlockNumber: 0,
 		currentBlockSize:   0,
+		offset:             0,
 	}, nil
 }
 
@@ -82,7 +92,7 @@ func (seg *Segment) Close() error {
 	return seg.fd.Close()
 }
 
-func (seg *Segment) Write(data []byte) (*ChunkStartPosition, error) {
+func (seg *Segment) Write(data []byte) (*ChunkPosition, error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}
@@ -103,7 +113,8 @@ func (seg *Segment) Write(data []byte) (*ChunkStartPosition, error) {
 	}
 
 	// the start position(for read operation)
-	position := &ChunkStartPosition{
+	position := &ChunkPosition{
+		SegmentId:   seg.id,
 		BlockNumber: seg.currentBlockNumber,
 		ChunkOffset: int64(seg.currentBlockSize),
 	}
@@ -178,6 +189,9 @@ func (seg *Segment) writeInternal(data []byte, chunkType ChunkType) error {
 		panic("wrong! can not exceed the block size")
 	}
 
+	// add the current offset
+	seg.offset += int64(dataSize + chunkHeaderSize)
+
 	// update the corresponding fields
 	seg.currentBlockSize += dataSize + chunkHeaderSize
 	// A new block
@@ -234,4 +248,8 @@ func (seg *Segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) 
 		chunkOffset = 0
 	}
 	return result, nil
+}
+
+func (seg *Segment) Offset() int64 {
+	return seg.offset
 }
