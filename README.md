@@ -3,7 +3,7 @@
 
 ## Design Overview
 
-![https://pica.zhimg.com/80/v2-9314b84c1c96d13638c5924087399644_1440w.png?source=d16d100b](https://pica.zhimg.com/80/v2-9314b84c1c96d13638c5924087399644_1440w.png?source=d16d100b)
+![](https://img-blog.csdnimg.cn/ee6ff16b879a4434aa90f9b4f1a417a9.png#pic_center)
 
 ## Format
 
