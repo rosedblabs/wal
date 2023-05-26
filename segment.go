@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"os"
+	"path/filepath"
 )
 
 type ChunkType = byte
@@ -41,7 +43,6 @@ type Segment struct {
 	fd                 *os.File
 	currentBlockNumber uint32
 	currentBlockSize   uint32
-	offset             int64
 	closed             bool
 }
 
@@ -54,7 +55,12 @@ type ChunkPosition struct {
 // Open a new segment file.
 func OpenSegmentFile(dirPath string, id uint32) (*Segment, error) {
 	fileName := fmt.Sprintf("%09d"+segmentFileSuffix, id)
-	fd, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR|os.O_APPEND, fileModePerm)
+	fd, err := os.OpenFile(
+		filepath.Join(dirPath, fileName),
+		os.O_CREATE|os.O_RDWR|os.O_APPEND,
+		fileModePerm,
+	)
+
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +69,6 @@ func OpenSegmentFile(dirPath string, id uint32) (*Segment, error) {
 		fd:                 fd,
 		currentBlockNumber: 0,
 		currentBlockSize:   0,
-		offset:             0,
 	}, nil
 }
 
@@ -90,6 +95,10 @@ func (seg *Segment) Close() error {
 
 	seg.closed = true
 	return seg.fd.Close()
+}
+
+func (seg *Segment) Size() int64 {
+	return int64(seg.currentBlockNumber*blockSize + seg.currentBlockSize)
 }
 
 func (seg *Segment) Write(data []byte) (*ChunkPosition, error) {
@@ -189,9 +198,6 @@ func (seg *Segment) writeInternal(data []byte, chunkType ChunkType) error {
 		panic("wrong! can not exceed the block size")
 	}
 
-	// add the current offset
-	seg.offset += int64(dataSize + chunkHeaderSize)
-
 	// update the corresponding fields
 	seg.currentBlockSize += dataSize + chunkHeaderSize
 	// A new block
@@ -208,7 +214,7 @@ func (seg *Segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) 
 		return nil, ErrClosed
 	}
 
-	stat, err := seg.fd.Stat()
+	segSize, err := seg.fd.Seek(0, io.SeekEnd)
 	if err != nil {
 		return nil, err
 	}
@@ -217,8 +223,8 @@ func (seg *Segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) 
 	for {
 		size := int64(blockSize)
 		offset := int64(blockNumber * blockSize)
-		if size+offset > stat.Size() {
-			size = stat.Size() - offset
+		if size+offset > segSize {
+			size = segSize - offset
 		}
 		buf := make([]byte, size)
 		_, err := seg.fd.ReadAt(buf, offset)
@@ -248,8 +254,4 @@ func (seg *Segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) 
 		chunkOffset = 0
 	}
 	return result, nil
-}
-
-func (seg *Segment) Offset() int64 {
-	return seg.offset
 }

@@ -1,15 +1,27 @@
 package wal
 
 import (
-	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestName(t *testing.T) {
-	name := "000900101.wal"
+func TestWAL_Write(t *testing.T) {
+	opts := Options{
+		DirPath:     "/tmp/wal",
+		SegmentSize: 1024 * 1024 * 1024,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
 
-	var id int
-	_, err := fmt.Sscanf(name, "%d"+segmentFileSuffix, &id)
-	t.Log(err)
-	t.Log("id = ", id)
+	pos, err := wal.Write([]byte("amazing roseduan is better"))
+	assert.Nil(t, err)
+	t.Log(pos)
+
+	res, err := wal.Read(pos)
+	t.Log(string(res), err)
+
+	// wal.Write([]byte("hello world1"))
+	// wal.Write([]byte("hello world2"))
+	// wal.Write([]byte("hello world3"))
 }
