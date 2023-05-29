@@ -35,10 +35,13 @@ const (
 
 	fileModePerm = 0644
 
-	segmentFileSuffix = ".seg"
+	segmentFileSuffix = ".SEG"
 )
 
-type Segment struct {
+// Segment represents a single segment file in WAL.
+// The segment file is append-only, and the data is written in blocks.
+// Each block is 32KB, and the data is written in chunks.
+type segment struct {
 	id                 SegmentID
 	fd                 *os.File
 	currentBlockNumber uint32
@@ -46,14 +49,16 @@ type Segment struct {
 	closed             bool
 }
 
+// ChunkPosition represents the position of a chunk in a segment file.
+// Used to read the data from the segment file.
 type ChunkPosition struct {
 	SegmentId   SegmentID
 	BlockNumber uint32
 	ChunkOffset int64
 }
 
-// Open a new segment file.
-func OpenSegmentFile(dirPath string, id uint32) (*Segment, error) {
+// openSegmentFile a new segment file.
+func openSegmentFile(dirPath string, id uint32) (*segment, error) {
 	fileName := fmt.Sprintf("%09d"+segmentFileSuffix, id)
 	fd, err := os.OpenFile(
 		filepath.Join(dirPath, fileName),
@@ -64,7 +69,7 @@ func OpenSegmentFile(dirPath string, id uint32) (*Segment, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Segment{
+	return &segment{
 		id:                 id,
 		fd:                 fd,
 		currentBlockNumber: 0,
@@ -72,14 +77,14 @@ func OpenSegmentFile(dirPath string, id uint32) (*Segment, error) {
 	}, nil
 }
 
-func (seg *Segment) Sync() error {
+func (seg *segment) Sync() error {
 	if seg.closed {
 		return nil
 	}
 	return seg.fd.Sync()
 }
 
-func (seg *Segment) Remove() error {
+func (seg *segment) Remove() error {
 	if !seg.closed {
 		seg.closed = true
 		_ = seg.fd.Close()
@@ -88,7 +93,7 @@ func (seg *Segment) Remove() error {
 	return os.Remove(seg.fd.Name())
 }
 
-func (seg *Segment) Close() error {
+func (seg *segment) Close() error {
 	if seg.closed {
 		return nil
 	}
@@ -97,11 +102,11 @@ func (seg *Segment) Close() error {
 	return seg.fd.Close()
 }
 
-func (seg *Segment) Size() int64 {
+func (seg *segment) Size() int64 {
 	return int64(seg.currentBlockNumber*blockSize + seg.currentBlockSize)
 }
 
-func (seg *Segment) Write(data []byte) (*ChunkPosition, error) {
+func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}
@@ -175,7 +180,7 @@ func (seg *Segment) Write(data []byte) (*ChunkPosition, error) {
 	return position, nil
 }
 
-func (seg *Segment) writeInternal(data []byte, chunkType ChunkType) error {
+func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 	dataSize := uint32(len(data))
 	buf := make([]byte, dataSize+chunkHeaderSize)
 
@@ -209,7 +214,7 @@ func (seg *Segment) writeInternal(data []byte, chunkType ChunkType) error {
 	return nil
 }
 
-func (seg *Segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
+func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}

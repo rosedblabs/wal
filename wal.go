@@ -13,8 +13,8 @@ const (
 )
 
 type WAL struct {
-	activeSegment *Segment               // active segment file, used for new incoming writes.
-	olderSegments map[SegmentID]*Segment // older segment files, only used for read.
+	activeSegment *segment               // active segment file, used for new incoming writes.
+	olderSegments map[SegmentID]*segment // older segment files, only used for read.
 	options       Options
 	mu            sync.RWMutex
 }
@@ -22,7 +22,7 @@ type WAL struct {
 func Open(options Options) (*WAL, error) {
 	wal := &WAL{
 		options:       options,
-		olderSegments: make(map[SegmentID]*Segment),
+		olderSegments: make(map[SegmentID]*segment),
 	}
 
 	// create the directory if not exists.
@@ -52,7 +52,7 @@ func Open(options Options) (*WAL, error) {
 
 	// empty directory, just initialize a new segment file and return.
 	if len(segmengIDs) == 0 {
-		segment, err := OpenSegmentFile(options.DirPath, initialSegmentFileID)
+		segment, err := openSegmentFile(options.DirPath, initialSegmentFileID)
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +62,7 @@ func Open(options Options) (*WAL, error) {
 		sort.Ints(segmengIDs)
 
 		for i, segId := range segmengIDs {
-			segment, err := OpenSegmentFile(options.DirPath, uint32(segId))
+			segment, err := openSegmentFile(options.DirPath, uint32(segId))
 			if err != nil {
 				return nil, err
 			}
@@ -86,11 +86,14 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 
 	// if the active segment file is full, close it and create a new one.
 	if wal.isFull(int64(len(data))) {
-		err := wal.activeSegment.Close()
-		if err != nil {
+		if err := wal.activeSegment.Sync(); err != nil {
 			return nil, err
 		}
-		segment, err := OpenSegmentFile(wal.options.DirPath, wal.activeSegment.id+1)
+		if err := wal.activeSegment.Close(); err != nil {
+			return nil, err
+		}
+
+		segment, err := openSegmentFile(wal.options.DirPath, wal.activeSegment.id+1)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +110,7 @@ func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 	defer wal.mu.RUnlock()
 
 	// find the segment file according to the position.
-	var segment *Segment
+	var segment *segment
 	if pos.SegmentId == wal.activeSegment.id {
 		segment = wal.activeSegment
 	} else {
