@@ -2,7 +2,6 @@ package wal
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"sync"
@@ -74,9 +73,6 @@ func Open(options Options) (*WAL, error) {
 		}
 	}
 
-	// set the current block number and block size.
-	wal.setActiveSegmentState()
-
 	return wal, nil
 }
 
@@ -127,13 +123,4 @@ func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 
 func (wal *WAL) isFull(delta int64) bool {
 	return wal.activeSegment.Size()+delta+chunkHeaderSize > wal.options.SegmentSize
-}
-
-func (wal *WAL) setActiveSegmentState() {
-	offset, err := wal.activeSegment.fd.Seek(0, io.SeekEnd)
-	if err != nil {
-		panic(fmt.Errorf("seek to the end of segment file %d%s failed: %v", wal.activeSegment.id, segmentFileSuffix, err))
-	}
-	wal.activeSegment.currentBlockNumber = uint32(offset / blockSize)
-	wal.activeSegment.currentBlockSize = uint32(offset % blockSize)
 }

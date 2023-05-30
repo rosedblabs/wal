@@ -21,7 +21,8 @@ const (
 )
 
 var (
-	ErrClosed = errors.New("the segment file is closed")
+	ErrClosed     = errors.New("the segment file is closed")
+	ErrInvalidCRC = errors.New("invalid crc, the data may be corrupted")
 )
 
 const (
@@ -69,11 +70,18 @@ func openSegmentFile(dirPath string, id uint32) (*segment, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// set the current block number and block size.
+	offset, err := fd.Seek(0, io.SeekEnd)
+	if err != nil {
+		panic(fmt.Errorf("seek to the end of segment file %d%s failed: %v", id, segmentFileSuffix, err))
+	}
+
 	return &segment{
 		id:                 id,
 		fd:                 fd,
-		currentBlockNumber: 0,
-		currentBlockSize:   0,
+		currentBlockNumber: uint32(offset / blockSize),
+		currentBlockSize:   uint32(offset % blockSize),
 	}, nil
 }
 
@@ -241,14 +249,20 @@ func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) 
 		header := make([]byte, chunkHeaderSize)
 		copy(header, buf[chunkOffset:chunkOffset+chunkHeaderSize])
 
-		// check sum todo
-
 		// length
 		legnth := binary.LittleEndian.Uint16(header[4:6])
 
 		// copy data
 		start := chunkOffset + chunkHeaderSize
 		result = append(result, buf[start:start+int64(legnth)]...)
+
+		// check sum
+		checkSumEnd := chunkOffset + chunkHeaderSize + int64(legnth)
+		checksum := crc32.ChecksumIEEE(buf[chunkOffset+4 : checkSumEnd])
+		savedSum := binary.LittleEndian.Uint32(header[:4])
+		if savedSum != checksum {
+			return nil, ErrInvalidCRC
+		}
 
 		// type
 		chunkType := header[6]
