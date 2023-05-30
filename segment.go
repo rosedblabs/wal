@@ -239,26 +239,28 @@ func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) 
 		if size+offset > segSize {
 			size = segSize - offset
 		}
-		buf := make([]byte, size)
-		_, err := seg.fd.ReadAt(buf, offset)
+
+		// read an entire block
+		block := make([]byte, size)
+		_, err := seg.fd.ReadAt(block, offset)
 		if err != nil {
 			return nil, err
 		}
 
-		// header part
+		// header
 		header := make([]byte, chunkHeaderSize)
-		copy(header, buf[chunkOffset:chunkOffset+chunkHeaderSize])
+		copy(header, block[chunkOffset:chunkOffset+chunkHeaderSize])
 
 		// length
 		legnth := binary.LittleEndian.Uint16(header[4:6])
 
 		// copy data
 		start := chunkOffset + chunkHeaderSize
-		result = append(result, buf[start:start+int64(legnth)]...)
+		result = append(result, block[start:start+int64(legnth)]...)
 
 		// check sum
-		checkSumEnd := chunkOffset + chunkHeaderSize + int64(legnth)
-		checksum := crc32.ChecksumIEEE(buf[chunkOffset+4 : checkSumEnd])
+		checksumEnd := chunkOffset + chunkHeaderSize + int64(legnth)
+		checksum := crc32.ChecksumIEEE(block[chunkOffset+4 : checksumEnd])
 		savedSum := binary.LittleEndian.Uint32(header[:4])
 		if savedSum != checksum {
 			return nil, ErrInvalidCRC
