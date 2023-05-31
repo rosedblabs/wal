@@ -49,7 +49,7 @@ func Open(options Options) (*WAL, error) {
 		segmengIDs = append(segmengIDs, id)
 	}
 
-	// empty directory, just initialize a new segment file and return.
+	// empty directory, just initialize a new segment file.
 	if len(segmengIDs) == 0 {
 		segment, err := openSegmentFile(options.DirPath, initialSegmentFileID)
 		if err != nil {
@@ -119,6 +119,14 @@ func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 
 	// read the data from the segment file.
 	return segment.Read(pos.BlockNumber, pos.ChunkOffset)
+}
+
+func (wal *WAL) Close() error {
+	return wal.activeSegment.Close()
+}
+
+func (wal *WAL) Sync() error {
+	return wal.activeSegment.Sync()
 }
 
 func (wal *WAL) isFull(delta int64) bool {
