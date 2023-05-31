@@ -2,6 +2,7 @@ package wal
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"sync"
@@ -19,6 +20,11 @@ type WAL struct {
 	options       Options
 	mu            sync.RWMutex
 	blockCache    *lru.Cache[uint64, []byte]
+}
+
+type Reader struct {
+	segmentReaders []*segmentReader
+	currentReader  int
 }
 
 func Open(options Options) (*WAL, error) {
@@ -90,6 +96,43 @@ func Open(options Options) (*WAL, error) {
 	}
 
 	return wal, nil
+}
+
+func (wal *WAL) NewReader() *Reader {
+	wal.mu.RLock()
+	defer wal.mu.RUnlock()
+
+	// get all segment readers.
+	var segmentReaders []*segmentReader
+	for _, segment := range wal.olderSegments {
+		reader := segment.NewReader()
+		segmentReaders = append(segmentReaders, reader)
+	}
+	reader := wal.activeSegment.NewReader()
+	segmentReaders = append(segmentReaders, reader)
+
+	// sort the segment readers by segment id.
+	sort.Slice(segmentReaders, func(i, j int) bool {
+		return segmentReaders[i].segment.id < segmentReaders[j].segment.id
+	})
+
+	return &Reader{
+		segmentReaders: segmentReaders,
+		currentReader:  0,
+	}
+}
+
+func (r *Reader) Next() ([]byte, error) {
+	if r.currentReader >= len(r.segmentReaders) {
+		return nil, io.EOF
+	}
+
+	data, err := r.segmentReaders[r.currentReader].Next()
+	if err == io.EOF {
+		r.currentReader++
+		return r.Next()
+	}
+	return data, err
 }
 
 func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {

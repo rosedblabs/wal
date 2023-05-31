@@ -274,10 +274,22 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		}
 
 		// read an entire block
-		block := make([]byte, size)
-		_, err := seg.fd.ReadAt(block, offset)
-		if err != nil {
-			return nil, nil, err
+		var block []byte
+		var ok bool
+		if seg.cache != nil {
+			block, ok = seg.cache.Get(seg.getCacheKey(blockNumber))
+		}
+		// cache miss, read from the segment file
+		if !ok || len(block) == 0 {
+			block = make([]byte, size)
+			_, err := seg.fd.ReadAt(block, offset)
+			if err != nil {
+				return nil, nil, err
+			}
+			// cache the block
+			if seg.cache != nil {
+				seg.cache.Add(seg.getCacheKey(blockNumber), block)
+			}
 		}
 
 		// header
@@ -317,6 +329,10 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		chunkOffset = 0
 	}
 	return result, nextChunk, nil
+}
+
+func (seg *segment) getCacheKey(blockNumber uint32) uint64 {
+	return uint64(seg.id)<<32 | uint64(blockNumber)
 }
 
 func (segReader *segmentReader) Next() ([]byte, error) {
