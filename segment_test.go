@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -129,4 +130,98 @@ func TestSegment_Write_NOT_FULL(t *testing.T) {
 	val4, err := seg.Read(pos4.BlockNumber, pos4.ChunkOffset)
 	assert.Nil(t, err)
 	assert.Equal(t, bytes2, val4)
+}
+
+func TestSegment_Reader_FULL(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "seg-test-reader-full")
+	seg, err := openSegmentFile(dir, 1)
+	assert.Nil(t, err)
+	defer func() {
+		_ = seg.Remove()
+	}()
+
+	// FULL chunks
+	bytes1 := []byte(strings.Repeat("X", blockSize+100))
+	seg.Write(bytes1)
+	seg.Write(bytes1)
+
+	reader := seg.NewReader()
+	val, err := reader.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val)
+
+	val, err = reader.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val)
+
+	val, err = reader.Next()
+	assert.Nil(t, val)
+	assert.Equal(t, err, io.EOF)
+}
+
+func TestSegment_Reader_Padding(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "seg-test-reader-padding")
+	seg, err := openSegmentFile(dir, 1)
+	assert.Nil(t, err)
+	defer func() {
+		_ = seg.Remove()
+	}()
+
+	bytes1 := []byte(strings.Repeat("X", blockSize-chunkHeaderSize-7))
+
+	_, err = seg.Write(bytes1)
+	assert.Nil(t, err)
+	_, err = seg.Write(bytes1)
+	assert.Nil(t, err)
+
+	reader := seg.NewReader()
+	val, err := reader.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val)
+
+	val, err = reader.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val)
+
+	_, err = reader.Next()
+	assert.Equal(t, err, io.EOF)
+
+	t.Log(seg.currentBlockNumber, seg.currentBlockSize)
+}
+
+func TestSegment_Reader_NOT_FULL(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "seg-test-reader-not-full")
+	seg, err := openSegmentFile(dir, 1)
+	assert.Nil(t, err)
+	defer func() {
+		_ = seg.Remove()
+	}()
+
+	bytes1 := []byte(strings.Repeat("X", blockSize+100))
+	seg.Write(bytes1)
+	seg.Write(bytes1)
+
+	bytes2 := []byte(strings.Repeat("X", blockSize*3+10))
+	seg.Write(bytes2)
+	seg.Write(bytes2)
+
+	reader := seg.NewReader()
+	val, err := reader.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val)
+
+	val, err = reader.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val)
+
+	val, err = reader.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, bytes2, val)
+
+	val, err = reader.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, bytes2, val)
+
+	_, err = reader.Next()
+	assert.Equal(t, err, io.EOF)
 }

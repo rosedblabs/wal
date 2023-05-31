@@ -50,6 +50,15 @@ type segment struct {
 	closed             bool
 }
 
+// segmentReader is used to iterate all the data from the segment file.
+// You can call Next to get the next chunk data,
+// and io.EOF will be returned when there is no data.
+type segmentReader struct {
+	segment     *segment
+	blockNumber uint32
+	chunkOffset int64
+}
+
 // ChunkPosition represents the position of a chunk in a segment file.
 // Used to read the data from the segment file.
 type ChunkPosition struct {
@@ -83,6 +92,14 @@ func openSegmentFile(dirPath string, id uint32) (*segment, error) {
 		currentBlockNumber: uint32(offset / blockSize),
 		currentBlockSize:   uint32(offset % blockSize),
 	}, nil
+}
+
+func (seg *segment) NewReader() *segmentReader {
+	return &segmentReader{
+		segment:     seg,
+		blockNumber: 0,
+		chunkOffset: 0,
+	}
 }
 
 func (seg *segment) Sync() error {
@@ -223,16 +240,24 @@ func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 }
 
 func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
+	value, _, err := seg.readInternal(blockNumber, chunkOffset)
+	return value, err
+}
+
+func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte, *ChunkPosition, error) {
 	if seg.closed {
-		return nil, ErrClosed
+		return nil, nil, ErrClosed
 	}
 
 	segSize, err := seg.fd.Seek(0, io.SeekEnd)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var result []byte
+	var (
+		result    []byte
+		nextChunk = &ChunkPosition{SegmentId: seg.id}
+	)
 	for {
 		size := int64(blockSize)
 		offset := int64(blockNumber * blockSize)
@@ -240,11 +265,15 @@ func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) 
 			size = segSize - offset
 		}
 
+		if chunkOffset >= size {
+			return nil, nil, io.EOF
+		}
+
 		// read an entire block
 		block := make([]byte, size)
 		_, err := seg.fd.ReadAt(block, offset)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		// header
@@ -263,16 +292,46 @@ func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) 
 		checksum := crc32.ChecksumIEEE(block[chunkOffset+4 : checksumEnd])
 		savedSum := binary.LittleEndian.Uint32(header[:4])
 		if savedSum != checksum {
-			return nil, ErrInvalidCRC
+			return nil, nil, ErrInvalidCRC
 		}
 
 		// type
 		chunkType := header[6]
+
 		if chunkType == ChunkTypeFull || chunkType == ChunkTypeLast {
+			nextChunk.BlockNumber = blockNumber
+			nextChunk.ChunkOffset = checksumEnd
+			// If this is the last chunk in the block, and the left block
+			// space are paddings, the next chunk should be in the next block.
+			if ((int64(blockNumber)+1)*blockSize)-checksumEnd <= chunkHeaderSize {
+				nextChunk.BlockNumber += 1
+				nextChunk.ChunkOffset = 0
+			}
 			break
 		}
 		blockNumber += 1
 		chunkOffset = 0
 	}
-	return result, nil
+	return result, nextChunk, nil
+}
+
+func (segReader *segmentReader) Next() ([]byte, error) {
+	// The segment file is closed
+	if segReader.segment.closed {
+		return nil, ErrClosed
+	}
+
+	value, nextChunk, err := segReader.segment.readInternal(
+		segReader.blockNumber,
+		segReader.chunkOffset,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// update the position
+	segReader.blockNumber = nextChunk.BlockNumber
+	segReader.chunkOffset = nextChunk.ChunkOffset
+
+	return value, nil
 }
