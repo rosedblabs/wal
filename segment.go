@@ -319,7 +319,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 			nextChunk.ChunkOffset = checksumEnd
 			// If this is the last chunk in the block, and the left block
 			// space are paddings, the next chunk should be in the next block.
-			if ((int64(blockNumber)+1)*blockSize)-checksumEnd <= chunkHeaderSize {
+			if checksumEnd+chunkHeaderSize >= blockSize {
 				nextChunk.BlockNumber += 1
 				nextChunk.ChunkOffset = 0
 			}

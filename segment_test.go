@@ -1,12 +1,12 @@
 package wal
 
 import (
+	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestSegment_Write_FULL1(t *testing.T) {
@@ -142,8 +142,10 @@ func TestSegment_Reader_FULL(t *testing.T) {
 
 	// FULL chunks
 	bytes1 := []byte(strings.Repeat("X", blockSize+100))
-	seg.Write(bytes1)
-	seg.Write(bytes1)
+	_, err = seg.Write(bytes1)
+	assert.Nil(t, err)
+	_, err = seg.Write(bytes1)
+	assert.Nil(t, err)
 
 	reader := seg.NewReader()
 	val, err := reader.Next()
@@ -196,12 +198,16 @@ func TestSegment_Reader_NOT_FULL(t *testing.T) {
 	}()
 
 	bytes1 := []byte(strings.Repeat("X", blockSize+100))
-	seg.Write(bytes1)
-	seg.Write(bytes1)
+	_, err = seg.Write(bytes1)
+	assert.Nil(t, err)
+	_, err = seg.Write(bytes1)
+	assert.Nil(t, err)
 
 	bytes2 := []byte(strings.Repeat("X", blockSize*3+10))
-	seg.Write(bytes2)
-	seg.Write(bytes2)
+	_, err = seg.Write(bytes2)
+	assert.Nil(t, err)
+	_, err = seg.Write(bytes2)
+	assert.Nil(t, err)
 
 	reader := seg.NewReader()
 	val, err := reader.Next()
@@ -222,4 +228,62 @@ func TestSegment_Reader_NOT_FULL(t *testing.T) {
 
 	_, err = reader.Next()
 	assert.Equal(t, err, io.EOF)
+}
+
+func TestSegment_Reader_ManyChunks_FULL(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "seg-test-reader-ManyChunks_FULL")
+	cache, _ := lru.New[uint64, []byte](5)
+	seg, err := openSegmentFile(dir, 1, cache)
+	assert.Nil(t, err)
+	defer func() {
+		_ = seg.Remove()
+	}()
+
+	bytes1 := []byte(strings.Repeat("X", 128))
+	for i := 1; i <= 1000000; i++ {
+		_, err = seg.Write(bytes1)
+		assert.Nil(t, err)
+	}
+
+	reader := seg.NewReader()
+	var values [][]byte
+	for {
+		val, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		assert.Nil(t, err)
+		assert.Equal(t, bytes1, val)
+		values = append(values, val)
+	}
+	assert.Equal(t, 1000000, len(values))
+}
+
+func TestSegment_Reader_ManyChunks_NOT_FULL(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "seg-test-reader-ManyChunks_NOT_FULL")
+	cache, _ := lru.New[uint64, []byte](5)
+	seg, err := openSegmentFile(dir, 1, cache)
+	assert.Nil(t, err)
+	defer func() {
+		_ = seg.Remove()
+	}()
+
+	bytes1 := []byte(strings.Repeat("X", blockSize*3+10))
+	for i := 1; i <= 10000; i++ {
+		_, err = seg.Write(bytes1)
+		assert.Nil(t, err)
+	}
+
+	reader := seg.NewReader()
+	var values [][]byte
+	for {
+		val, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		assert.Nil(t, err)
+		assert.Equal(t, bytes1, val)
+		values = append(values, val)
+	}
+	assert.Equal(t, 10000, len(values))
 }
