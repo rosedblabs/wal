@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type ChunkType = byte
@@ -48,6 +50,7 @@ type segment struct {
 	currentBlockNumber uint32
 	currentBlockSize   uint32
 	closed             bool
+	cache              *lru.Cache[uint64, []byte]
 }
 
 // segmentReader is used to iterate all the data from the segment file.
@@ -68,7 +71,7 @@ type ChunkPosition struct {
 }
 
 // openSegmentFile a new segment file.
-func openSegmentFile(dirPath string, id uint32) (*segment, error) {
+func openSegmentFile(dirPath string, id uint32, cache *lru.Cache[uint64, []byte]) (*segment, error) {
 	fileName := fmt.Sprintf("%09d"+segmentFileSuffix, id)
 	fd, err := os.OpenFile(
 		filepath.Join(dirPath, fileName),
@@ -89,6 +92,7 @@ func openSegmentFile(dirPath string, id uint32) (*segment, error) {
 	return &segment{
 		id:                 id,
 		fd:                 fd,
+		cache:              cache,
 		currentBlockNumber: uint32(offset / blockSize),
 		currentBlockSize:   uint32(offset % blockSize),
 	}, nil
