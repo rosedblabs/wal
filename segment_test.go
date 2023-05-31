@@ -1,60 +1,132 @@
 package wal
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSegment_Write_FULL(t *testing.T) {
-	// dir, _ := os.MkdirTemp("", "seg-test")
-	dir := "/tmp"
+func TestSegment_Write_FULL1(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "seg-test-full1")
 	seg, err := openSegmentFile(dir, 1)
 	assert.Nil(t, err)
-	// defer seg.Remove()
+	defer func() {
+		_ = seg.Remove()
+	}()
 
-	// val := []byte(strings.Repeat("X", 100))
+	// 1. FULL chunks
+	val := []byte(strings.Repeat("X", 100))
 
-	// pos, err := seg.Write(val)
-	// t.Log(pos, err)
-	// pos, err = seg.Write(val)
-	// t.Log(pos, err)
-	// pos, err = seg.Write(val)
-	// t.Log(pos, err)
+	pos1, err := seg.Write(val)
+	assert.Nil(t, err)
+	pos2, err := seg.Write(val)
+	assert.Nil(t, err)
 
-	res, err := seg.Read(0, 0)
-	t.Log(string(res), err)
-	// res, err = seg.Read(0, 107)
-	// t.Log(string(res), err)
+	val1, err := seg.Read(pos1.BlockNumber, pos1.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, val, val1)
 
-	// val2 := []byte(strings.Repeat("X", 512))
-	// for i := 0; i < 100; i++ {
-	// 	pos, err = seg.Write(val2)
-	// 	t.Log(pos, err)
-	// }
-	res, err = seg.Read(1, 26222)
-	t.Log(len(res), err)
-	t.Log(string(res), err)
+	val2, err := seg.Read(pos2.BlockNumber, pos2.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, val, val2)
+
+	// 2. Write until a new block
+	for i := 0; i < 100000; i++ {
+		pos, err := seg.Write(val)
+		assert.Nil(t, err)
+		val, err := seg.Read(pos.BlockNumber, pos.ChunkOffset)
+		assert.Nil(t, err)
+		assert.Equal(t, val, val)
+	}
+}
+
+func TestSegment_Write_FULL2(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "seg-test-full2")
+	seg, err := openSegmentFile(dir, 1)
+	assert.Nil(t, err)
+	defer func() {
+		_ = seg.Remove()
+	}()
+
+	// 3. chunk full with a block
+	val := []byte(strings.Repeat("X", blockSize-chunkHeaderSize))
+
+	pos1, err := seg.Write(val)
+	assert.Nil(t, err)
+	assert.Equal(t, pos1.BlockNumber, uint32(0))
+	assert.Equal(t, pos1.ChunkOffset, int64(0))
+	val1, err := seg.Read(pos1.BlockNumber, pos1.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, val, val1)
+
+	pos2, err := seg.Write(val)
+	assert.Nil(t, err)
+	assert.Equal(t, pos2.BlockNumber, uint32(1))
+	assert.Equal(t, pos2.ChunkOffset, int64(0))
+	val2, err := seg.Read(pos2.BlockNumber, pos2.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, val, val2)
+}
+
+func TestSegment_Write_Padding(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "seg-test-padding")
+	seg, err := openSegmentFile(dir, 1)
+	assert.Nil(t, err)
+	defer func() {
+		_ = seg.Remove()
+	}()
+
+	// 4. padding
+	val := []byte(strings.Repeat("X", blockSize-chunkHeaderSize-3))
+
+	_, err = seg.Write(val)
+	assert.Nil(t, err)
+
+	pos1, err := seg.Write(val)
+	assert.Nil(t, err)
+	assert.Equal(t, pos1.BlockNumber, uint32(1))
+	assert.Equal(t, pos1.ChunkOffset, int64(0))
+	val1, err := seg.Read(pos1.BlockNumber, pos1.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, val, val1)
 }
 
 func TestSegment_Write_NOT_FULL(t *testing.T) {
-	// dir, _ := os.MkdirTemp("", "seg-test")
-	dir := "/tmp"
-	seg, err := openSegmentFile(dir, 2)
+	dir, _ := os.MkdirTemp("", "seg-test-not-full")
+	seg, err := openSegmentFile(dir, 1)
 	assert.Nil(t, err)
-	// defer seg.Remove()
+	defer func() {
+		_ = seg.Remove()
+	}()
 
-	val1 := []byte(strings.Repeat("X", 512))
-	for i := 0; i < 100; i++ {
-		pos, err := seg.Write(val1)
-		t.Log(pos, err)
-	}
+	// 5. FIRST-LAST
+	bytes1 := []byte(strings.Repeat("X", blockSize+100))
 
-	// val2 := []byte(strings.Repeat("X", 32*1024*5))
-	// pos, err := seg.Write(val2)
-	// t.Log(pos, err)
+	pos1, err := seg.Write(bytes1)
+	assert.Nil(t, err)
+	val1, err := seg.Read(pos1.BlockNumber, pos1.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val1)
 
-	res, err := seg.Read(1, 19139)
-	t.Log(len(res), err)
+	pos2, err := seg.Write(bytes1)
+	assert.Nil(t, err)
+	val2, err := seg.Read(pos2.BlockNumber, pos2.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val2)
+
+	pos3, err := seg.Write(bytes1)
+	assert.Nil(t, err)
+	val3, err := seg.Read(pos3.BlockNumber, pos3.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, bytes1, val3)
+
+	// 6. FIRST-MIDDLE-LAST
+	bytes2 := []byte(strings.Repeat("X", blockSize*3+100))
+	pos4, err := seg.Write(bytes2)
+	assert.Nil(t, err)
+	val4, err := seg.Read(pos4.BlockNumber, pos4.ChunkOffset)
+	assert.Nil(t, err)
+	assert.Equal(t, bytes2, val4)
 }
