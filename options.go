@@ -1,5 +1,7 @@
 package wal
 
+import "os"
+
 type Options struct {
 	DirPath     string
 	SegmentSize int64
@@ -7,7 +9,7 @@ type Options struct {
 }
 
 var DefaultOptions = Options{
-	DirPath:     "/tmp/wal",
+	DirPath:     os.TempDir(),
 	SegmentSize: 1024 * 1024 * 1024,
 	BlockCache:  0,
 }

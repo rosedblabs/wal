@@ -1,13 +1,13 @@
 # wal
-**[WIP] Write Ahead Log for Go applications.**
+Write Ahead Log for LSM or bitcask storage, with block cache.
 
 ## Design Overview
 
-![](https://img-blog.csdnimg.cn/ee6ff16b879a4434aa90f9b4f1a417a9.png#pic_center)
+![](https://img-blog.csdnimg.cn/3910507c20a04f9190c3664e3657a4b1.png#pic_center)
 
 ## Format
 
-**Format of the WAL file:**
+**Format of a single segment file:**
 
 ```
        +-----+-------------+--+----+----------+------+-- ... ----+
@@ -39,16 +39,26 @@ Payload = Byte stream as long as specified by the payload size
 ## Getting Started
 
 ```go
-import (
-   "path/filepath"
-   "wal"
-)
-
 func main() {
-   wal, _ := wal.Open(filepath.Join("/tmp", "00001.log"))
-   pos, _ := wal.Write([]byte("wal log entry")) // get the position of the record
+	wal, _ := wal.Open(wal.DefaultOptions)
+	// write some data
+	chunkPosition, _ := wal.Write([]byte("some data 1"))
+	// read by the posistion
+	val, _ := wal.Read(chunkPosition)
+	fmt.Println(string(val))
 
-   res, _ := wal.Read(pos.BlockNumber, pos.ChunkOffset) // read the specified record
-   println(res)
+	wal.Write([]byte("some data 2"))
+	wal.Write([]byte("some data 3"))
+
+	// iterate all data in wal
+	reader := wal.NewReader()
+	for {
+		val, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		fmt.Println(string(val))
+	}
 }
+
 ```
