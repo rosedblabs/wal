@@ -159,12 +159,9 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
 
-	// if the active segment file is full, close it and create a new one.
+	// if the active segment file is full, sync it and create a new one.
 	if wal.isFull(int64(len(data))) {
 		if err := wal.activeSegment.Sync(); err != nil {
-			return nil, err
-		}
-		if err := wal.activeSegment.Close(); err != nil {
 			return nil, err
 		}
 
