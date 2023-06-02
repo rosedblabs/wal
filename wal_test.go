@@ -1,9 +1,9 @@
 package wal
 
 import (
+	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestWAL_Open(t *testing.T) {

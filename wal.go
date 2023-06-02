@@ -14,6 +14,20 @@ const (
 	initialSegmentFileID = 1
 )
 
+// WAL represents a Write-Ahead Log structure that provides durability
+// and fault-tolerance for incoming writes.
+// It consists of an activeSegment, which is the current segment file
+// used for new incoming writes, and olderSegments,
+// which is a map of segment files used for read operations.
+//
+// The options field stores various configuration options for the WAL.
+//
+// The mu sync.RWMutex is used for concurrent access to the WAL data structure,
+// ensuring safe access and modification.
+//
+// The blockCache is an LRU cache used to store recently accessed data blocks,
+// improving read performance by reducing disk I/O.
+// It is implemented using a lru.Cache structure with keys of type uint64 and values of type []byte.
 type WAL struct {
 	activeSegment *segment               // active segment file, used for new incoming writes.
 	olderSegments map[SegmentID]*segment // older segment files, only used for read.
@@ -22,6 +36,12 @@ type WAL struct {
 	blockCache    *lru.Cache[uint64, []byte]
 }
 
+// Reader represents a reader for the WAL.
+// It consists of segmentReaders, which is a slice of segmentReader
+// structures sorted by segment id,
+// and currentReader, which is the index of the current segmentReader in the slice.
+//
+// The currentReader field is used to iterate over the segmentReaders slice.
 type Reader struct {
 	segmentReaders []*segmentReader
 	currentReader  int
