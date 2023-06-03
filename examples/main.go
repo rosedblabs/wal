@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
-	"wal"
+	"github.com/rosedblabs/wal"
 )
 
 func main() {

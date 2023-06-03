@@ -1,4 +1,4 @@
-module wal
+module github.com/rosedblabs/wal
 
 go 1.19
 
