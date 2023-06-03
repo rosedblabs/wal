@@ -34,7 +34,7 @@ const (
 	chunkHeaderSize = 7
 
 	// 32 KB
-	blockSize = 32 * 1024
+	blockSize = 32 * KB
 
 	fileModePerm = 0644
 
@@ -65,9 +65,13 @@ type segmentReader struct {
 // ChunkPosition represents the position of a chunk in a segment file.
 // Used to read the data from the segment file.
 type ChunkPosition struct {
-	SegmentId   SegmentID
+	SegmentId SegmentID
+	// BlockNumber The block number of the chunk in the segment file.
 	BlockNumber uint32
+	// ChunkOffset The start offset of the chunk in the segment file.
 	ChunkOffset int64
+	// ChunkSize How many bytes the chunk data takes up in the segment file.
+	ChunkSize uint32
 }
 
 // openSegmentFile a new segment file.
@@ -168,12 +172,14 @@ func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 		if err != nil {
 			return nil, err
 		}
+		position.ChunkSize = dataSize + chunkHeaderSize
 		return position, nil
 	}
 
 	// If the size of the data exceeds the size of the block,
 	// the data should be written to the block in batches.
 	var leftSize = dataSize
+	var blockCount uint32 = 0
 	for leftSize > 0 {
 		chunkSize := blockSize - seg.currentBlockSize - chunkHeaderSize
 		if chunkSize > leftSize {
@@ -204,8 +210,10 @@ func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 			return nil, err
 		}
 		leftSize -= chunkSize
+		blockCount += 1
 	}
 
+	position.ChunkSize = blockCount*chunkHeaderSize + dataSize
 	return position, nil
 }
 

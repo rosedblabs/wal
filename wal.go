@@ -34,6 +34,7 @@ type WAL struct {
 	options       Options
 	mu            sync.RWMutex
 	blockCache    *lru.Cache[uint64, []byte]
+	bytesWrite    uint32
 }
 
 // Reader represents a reader for the WAL.
@@ -174,7 +175,27 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	}
 
 	// write the data to the active segment file.
-	return wal.activeSegment.Write(data)
+	position, err := wal.activeSegment.Write(data)
+	if err != nil {
+		return nil, err
+	}
+
+	// update the bytesWrite field.
+	wal.bytesWrite += position.ChunkSize
+
+	// sync the active segment file if needed.
+	var needSync = wal.options.Sync
+	if !needSync && wal.options.BytesPerSync > 0 {
+		needSync = wal.bytesWrite >= wal.options.BytesPerSync
+	}
+	if needSync {
+		if err := wal.activeSegment.Sync(); err != nil {
+			return nil, err
+		}
+		wal.bytesWrite = 0
+	}
+
+	return position, nil
 }
 
 func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
