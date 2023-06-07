@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+
 	"github.com/rosedblabs/wal"
 )
 
@@ -20,10 +21,11 @@ func main() {
 	// iterate all data in wal
 	reader := wal.NewReader()
 	for {
-		val, err := reader.Next()
+		val, pos, err := reader.Next()
 		if err == io.EOF {
 			break
 		}
 		fmt.Println(string(val))
+		fmt.Println(pos) // get position of the data for next read
 	}
 }

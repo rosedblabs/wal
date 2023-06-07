@@ -1,12 +1,13 @@
 package wal
 
 import (
-	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSegment_Write_FULL1(t *testing.T) {
@@ -142,23 +143,26 @@ func TestSegment_Reader_FULL(t *testing.T) {
 
 	// FULL chunks
 	bytes1 := []byte(strings.Repeat("X", blockSize+100))
-	_, err = seg.Write(bytes1)
+	pos1, err := seg.Write(bytes1)
 	assert.Nil(t, err)
-	_, err = seg.Write(bytes1)
+	pos2, err := seg.Write(bytes1)
 	assert.Nil(t, err)
 
 	reader := seg.NewReader()
-	val, err := reader.Next()
+	val, rpos1, err := reader.Next()
 	assert.Nil(t, err)
 	assert.Equal(t, bytes1, val)
+	assert.Equal(t, pos1, rpos1)
 
-	val, err = reader.Next()
+	val, rpos2, err := reader.Next()
 	assert.Nil(t, err)
 	assert.Equal(t, bytes1, val)
+	assert.Equal(t, pos2, rpos2)
 
-	val, err = reader.Next()
+	val, rpos3, err := reader.Next()
 	assert.Nil(t, val)
 	assert.Equal(t, err, io.EOF)
+	assert.Nil(t, rpos3)
 }
 
 func TestSegment_Reader_Padding(t *testing.T) {
@@ -171,21 +175,27 @@ func TestSegment_Reader_Padding(t *testing.T) {
 
 	bytes1 := []byte(strings.Repeat("X", blockSize-chunkHeaderSize-7))
 
-	_, err = seg.Write(bytes1)
+	pos1, err := seg.Write(bytes1)
 	assert.Nil(t, err)
-	_, err = seg.Write(bytes1)
+	pos2, err := seg.Write(bytes1)
 	assert.Nil(t, err)
 
 	reader := seg.NewReader()
-	val, err := reader.Next()
+	val, rpos1, err := reader.Next()
 	assert.Nil(t, err)
 	assert.Equal(t, bytes1, val)
+	assert.Equal(t, pos1.SegmentId, rpos1.SegmentId)
+	assert.Equal(t, pos1.BlockNumber, rpos1.BlockNumber)
+	assert.Equal(t, pos1.ChunkOffset, rpos1.ChunkOffset)
 
-	val, err = reader.Next()
+	val, rpos2, err := reader.Next()
 	assert.Nil(t, err)
 	assert.Equal(t, bytes1, val)
+	assert.Equal(t, pos2.SegmentId, rpos2.SegmentId)
+	assert.Equal(t, pos2.BlockNumber, rpos2.BlockNumber)
+	assert.Equal(t, pos2.ChunkOffset, rpos2.ChunkOffset)
 
-	_, err = reader.Next()
+	_, _, err = reader.Next()
 	assert.Equal(t, err, io.EOF)
 }
 
@@ -198,36 +208,41 @@ func TestSegment_Reader_NOT_FULL(t *testing.T) {
 	}()
 
 	bytes1 := []byte(strings.Repeat("X", blockSize+100))
-	_, err = seg.Write(bytes1)
+	pos1, err := seg.Write(bytes1)
 	assert.Nil(t, err)
-	_, err = seg.Write(bytes1)
+	pos2, err := seg.Write(bytes1)
 	assert.Nil(t, err)
 
 	bytes2 := []byte(strings.Repeat("X", blockSize*3+10))
-	_, err = seg.Write(bytes2)
+	pos3, err := seg.Write(bytes2)
 	assert.Nil(t, err)
-	_, err = seg.Write(bytes2)
+	pos4, err := seg.Write(bytes2)
 	assert.Nil(t, err)
 
 	reader := seg.NewReader()
-	val, err := reader.Next()
+	val, rpos1, err := reader.Next()
 	assert.Nil(t, err)
 	assert.Equal(t, bytes1, val)
 
-	val, err = reader.Next()
+	val, rpos2, err := reader.Next()
 	assert.Nil(t, err)
 	assert.Equal(t, bytes1, val)
 
-	val, err = reader.Next()
+	val, rpos3, err := reader.Next()
 	assert.Nil(t, err)
 	assert.Equal(t, bytes2, val)
 
-	val, err = reader.Next()
+	val, rpos4, err := reader.Next()
 	assert.Nil(t, err)
 	assert.Equal(t, bytes2, val)
 
-	_, err = reader.Next()
+	_, _, err = reader.Next()
 	assert.Equal(t, err, io.EOF)
+
+	assert.Equal(t, pos1, rpos1)
+	assert.Equal(t, pos2, rpos2)
+	assert.Equal(t, pos3, rpos3)
+	assert.Equal(t, pos4, rpos4)
 }
 
 func TestSegment_Reader_ManyChunks_FULL(t *testing.T) {
@@ -239,22 +254,31 @@ func TestSegment_Reader_ManyChunks_FULL(t *testing.T) {
 		_ = seg.Remove()
 	}()
 
+	positions := make([]*ChunkPosition, 0)
 	bytes1 := []byte(strings.Repeat("X", 128))
 	for i := 1; i <= 1000000; i++ {
-		_, err = seg.Write(bytes1)
+		pos, err := seg.Write(bytes1)
 		assert.Nil(t, err)
+		positions = append(positions, pos)
 	}
 
 	reader := seg.NewReader()
 	var values [][]byte
+	var i = 0
 	for {
-		val, err := reader.Next()
+		val, pos, err := reader.Next()
 		if err == io.EOF {
 			break
 		}
 		assert.Nil(t, err)
 		assert.Equal(t, bytes1, val)
 		values = append(values, val)
+
+		assert.Equal(t, positions[i].SegmentId, pos.SegmentId)
+		assert.Equal(t, positions[i].BlockNumber, pos.BlockNumber)
+		assert.Equal(t, positions[i].ChunkOffset, pos.ChunkOffset)
+
+		i++
 	}
 	assert.Equal(t, 1000000, len(values))
 }
@@ -268,22 +292,31 @@ func TestSegment_Reader_ManyChunks_NOT_FULL(t *testing.T) {
 		_ = seg.Remove()
 	}()
 
+	positions := make([]*ChunkPosition, 0)
 	bytes1 := []byte(strings.Repeat("X", blockSize*3+10))
 	for i := 1; i <= 10000; i++ {
-		_, err = seg.Write(bytes1)
+		pos, err := seg.Write(bytes1)
 		assert.Nil(t, err)
+		positions = append(positions, pos)
 	}
 
 	reader := seg.NewReader()
 	var values [][]byte
+	var i = 0
 	for {
-		val, err := reader.Next()
+		val, pos, err := reader.Next()
 		if err == io.EOF {
 			break
 		}
 		assert.Nil(t, err)
 		assert.Equal(t, bytes1, val)
 		values = append(values, val)
+
+		assert.Equal(t, positions[i].SegmentId, pos.SegmentId)
+		assert.Equal(t, positions[i].BlockNumber, pos.BlockNumber)
+		assert.Equal(t, positions[i].ChunkOffset, pos.ChunkOffset)
+
+		i++
 	}
 	assert.Equal(t, 10000, len(values))
 }

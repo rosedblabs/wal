@@ -143,17 +143,21 @@ func (wal *WAL) NewReader() *Reader {
 	}
 }
 
-func (r *Reader) Next() ([]byte, error) {
+// Next returns the next chunk data and its position in the WAL.
+// If there is no data, io.EOF will be returned.
+//
+// The position can be used to read the data from the segment file.
+func (r *Reader) Next() ([]byte, *ChunkPosition, error) {
 	if r.currentReader >= len(r.segmentReaders) {
-		return nil, io.EOF
+		return nil, nil, io.EOF
 	}
 
-	data, err := r.segmentReaders[r.currentReader].Next()
+	data, position, err := r.segmentReaders[r.currentReader].Next()
 	if err == io.EOF {
 		r.currentReader++
 		return r.Next()
 	}
-	return data, err
+	return data, position, err
 }
 
 func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {

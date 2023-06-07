@@ -343,10 +343,17 @@ func (seg *segment) getCacheKey(blockNumber uint32) uint64 {
 	return uint64(seg.id)<<32 | uint64(blockNumber)
 }
 
-func (segReader *segmentReader) Next() ([]byte, error) {
+func (segReader *segmentReader) Next() ([]byte, *ChunkPosition, error) {
 	// The segment file is closed
 	if segReader.segment.closed {
-		return nil, ErrClosed
+		return nil, nil, ErrClosed
+	}
+
+	// this position describes the current chunk info
+	chunkPosition := &ChunkPosition{
+		SegmentId:   segReader.segment.id,
+		BlockNumber: segReader.blockNumber,
+		ChunkOffset: segReader.chunkOffset,
 	}
 
 	value, nextChunk, err := segReader.segment.readInternal(
@@ -354,12 +361,19 @@ func (segReader *segmentReader) Next() ([]byte, error) {
 		segReader.chunkOffset,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	// Calculate the chunk size.
+	// Remember that the chunk size is just an estimated value,
+	// not accurate, so don't use it for any important logic.
+	chunkPosition.ChunkSize =
+		nextChunk.BlockNumber*blockSize + uint32(nextChunk.ChunkOffset) -
+			(segReader.blockNumber*blockSize + uint32(segReader.chunkOffset))
 
 	// update the position
 	segReader.blockNumber = nextChunk.BlockNumber
 	segReader.chunkOffset = nextChunk.ChunkOffset
 
-	return value, nil
+	return value, chunkPosition, nil
 }

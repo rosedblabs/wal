@@ -75,20 +75,27 @@ func TestWAL_Write_large2(t *testing.T) {
 
 func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
 	val := strings.Repeat("wal", valueSize)
+	positions := make([]*ChunkPosition, size)
 	for i := 0; i < size; i++ {
-		_, err := wal.Write([]byte(val))
+		pos, err := wal.Write([]byte(val))
 		assert.Nil(t, err)
+		positions[i] = pos
 	}
 
 	var count int
 	// iterates all the data
 	reader := wal.NewReader()
 	for {
-		data, err := reader.Next()
+		data, pos, err := reader.Next()
 		if err != nil {
 			break
 		}
 		assert.Equal(t, val, string(data))
+
+		assert.Equal(t, positions[count].SegmentId, pos.SegmentId)
+		assert.Equal(t, positions[count].BlockNumber, pos.BlockNumber)
+		assert.Equal(t, positions[count].ChunkOffset, pos.ChunkOffset)
+
 		count++
 	}
 	assert.Equal(t, size, count)
