@@ -294,8 +294,10 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 			if err != nil {
 				return nil, nil, err
 			}
-			// cache the block
-			if seg.cache != nil {
+			// cache the block, so that the next time it can be read from the cache.
+			// if the block size is smaller than blockSize, it means that the block is not full,
+			// so we will not cache it.
+			if seg.cache != nil && size == blockSize {
 				seg.cache.Add(seg.getCacheKey(blockNumber), block)
 			}
 		}
