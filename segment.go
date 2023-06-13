@@ -29,7 +29,7 @@ var (
 
 const (
 	// 7 Bytes
-	// Checksum Type Length
+	// Checksum Length Type
 	//    4      2     1
 	chunkHeaderSize = 7
 
