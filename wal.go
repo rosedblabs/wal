@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,10 @@ import (
 
 const (
 	initialSegmentFileID = 1
+)
+
+var (
+	ErrTooLarge = errors.New("the data size can't larger than sigment size")
 )
 
 // WAL represents a Write-Ahead Log structure that provides durability
@@ -163,13 +168,15 @@ func (r *Reader) Next() ([]byte, *ChunkPosition, error) {
 func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
-
+	if int64(len(data))+chunkHeaderSize > wal.options.SegmentSize {
+		return nil, ErrTooLarge
+	}
 	// if the active segment file is full, sync it and create a new one.
 	if wal.isFull(int64(len(data))) {
 		if err := wal.activeSegment.Sync(); err != nil {
 			return nil, err
 		}
-
+		wal.bytesWrite = 0
 		segment, err := openSegmentFile(wal.options.DirPath, wal.activeSegment.id+1, wal.blockCache)
 		if err != nil {
 			return nil, err
