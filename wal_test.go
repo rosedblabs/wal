@@ -75,12 +75,15 @@ func TestWAL_Write_large2(t *testing.T) {
 
 func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
 	val := strings.Repeat("wal", valueSize)
+	totalWrite := 0.0
 	positions := make([]*ChunkPosition, size)
 	for i := 0; i < size; i++ {
 		pos, err := wal.Write([]byte(val))
+		totalWrite += float64(len(val))
 		assert.Nil(t, err)
 		positions[i] = pos
 	}
+	t.Logf("total write: %.4fMB\n", totalWrite/1024/1024)
 
 	var count int
 	// iterates all the data
