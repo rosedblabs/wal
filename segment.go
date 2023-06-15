@@ -157,9 +157,9 @@ func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 		}
 
 		// A new block, clear the current block size.
+		seg.size += int64(blockSize - seg.currentBlockSize)
 		seg.currentBlockNumber += 1
 		seg.currentBlockSize = 0
-		seg.size += int64(blockSize - seg.currentBlockSize)
 	}
 
 	// the start position(for read operation)
@@ -264,12 +264,6 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		return nil, nil, ErrClosed
 	}
 
-	//segSize, err := seg.fd.Seek(0, io.SeekEnd) // 1.96 - 2.07
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
-	segSize := seg.size
-
 	var (
 		result    []byte
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
@@ -277,8 +271,8 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 	for {
 		size := int64(blockSize)
 		offset := int64(blockNumber * blockSize)
-		if size+offset > segSize {
-			size = segSize - offset
+		if size+offset > seg.size {
+			size = seg.size - offset
 		}
 
 		if chunkOffset >= size {
