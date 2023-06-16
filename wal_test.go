@@ -51,9 +51,9 @@ func TestWAL_Write(t *testing.T) {
 func TestWAL_Write_large(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write2")
 	opts := Options{
-		DirPath:     dir,
+		DirPath:       dir,
 		SementFileExt: ".SEG",
-		SegmentSize: 32 * 1024 * 1024,
+		SegmentSize:   32 * 1024 * 1024,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -65,9 +65,9 @@ func TestWAL_Write_large(t *testing.T) {
 func TestWAL_Write_large2(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write3")
 	opts := Options{
-		DirPath:     dir,
+		DirPath:       dir,
 		SementFileExt: ".SEG",
-		SegmentSize: 32 * 1024 * 1024,
+		SegmentSize:   32 * 1024 * 1024,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -79,9 +79,9 @@ func TestWAL_Write_large2(t *testing.T) {
 func TestWAL_OpenNewActiveSegment(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-new-active-segment")
 	opts := Options{
-		DirPath:     dir,
+		DirPath:       dir,
 		SementFileExt: ".SEG",
-		SegmentSize: 32 * 1024 * 1024,
+		SegmentSize:   32 * 1024 * 1024,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
