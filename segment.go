@@ -37,8 +37,6 @@ const (
 	blockSize = 32 * KB
 
 	fileModePerm = 0644
-
-	segmentFileSuffix = ".SEG"
 )
 
 // Segment represents a single segment file in WAL.
@@ -75,8 +73,8 @@ type ChunkPosition struct {
 }
 
 // openSegmentFile a new segment file.
-func openSegmentFile(dirPath string, id uint32, cache *lru.Cache[uint64, []byte]) (*segment, error) {
-	fileName := fmt.Sprintf("%09d"+segmentFileSuffix, id)
+func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64, []byte]) (*segment, error) {
+	fileName := fmt.Sprintf("%09d"+extName, id)
 	fd, err := os.OpenFile(
 		filepath.Join(dirPath, fileName),
 		os.O_CREATE|os.O_RDWR|os.O_APPEND,
@@ -90,7 +88,7 @@ func openSegmentFile(dirPath string, id uint32, cache *lru.Cache[uint64, []byte]
 	// set the current block number and block size.
 	offset, err := fd.Seek(0, io.SeekEnd)
 	if err != nil {
-		panic(fmt.Errorf("seek to the end of segment file %d%s failed: %v", id, segmentFileSuffix, err))
+		panic(fmt.Errorf("seek to the end of segment file %d%s failed: %v", id, extName, err))
 	}
 
 	return &segment{

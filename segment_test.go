@@ -12,7 +12,7 @@ import (
 
 func TestSegment_Write_FULL1(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-full1")
-	seg, err := openSegmentFile(dir, 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -46,7 +46,7 @@ func TestSegment_Write_FULL1(t *testing.T) {
 
 func TestSegment_Write_FULL2(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-full2")
-	seg, err := openSegmentFile(dir, 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -74,7 +74,7 @@ func TestSegment_Write_FULL2(t *testing.T) {
 
 func TestSegment_Write_Padding(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-padding")
-	seg, err := openSegmentFile(dir, 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -97,7 +97,7 @@ func TestSegment_Write_Padding(t *testing.T) {
 
 func TestSegment_Write_NOT_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-not-full")
-	seg, err := openSegmentFile(dir, 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -135,7 +135,7 @@ func TestSegment_Write_NOT_FULL(t *testing.T) {
 
 func TestSegment_Reader_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-full")
-	seg, err := openSegmentFile(dir, 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -167,7 +167,7 @@ func TestSegment_Reader_FULL(t *testing.T) {
 
 func TestSegment_Reader_Padding(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-padding")
-	seg, err := openSegmentFile(dir, 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -201,7 +201,7 @@ func TestSegment_Reader_Padding(t *testing.T) {
 
 func TestSegment_Reader_NOT_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-not-full")
-	seg, err := openSegmentFile(dir, 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -248,7 +248,7 @@ func TestSegment_Reader_NOT_FULL(t *testing.T) {
 func TestSegment_Reader_ManyChunks_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-ManyChunks_FULL")
 	cache, _ := lru.New[uint64, []byte](5)
-	seg, err := openSegmentFile(dir, 1, cache)
+	seg, err := openSegmentFile(dir, ".SEG", 1, cache)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -286,7 +286,7 @@ func TestSegment_Reader_ManyChunks_FULL(t *testing.T) {
 func TestSegment_Reader_ManyChunks_NOT_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-ManyChunks_NOT_FULL")
 	cache, _ := lru.New[uint64, []byte](5)
-	seg, err := openSegmentFile(dir, 1, cache)
+	seg, err := openSegmentFile(dir, ".SEG", 1, cache)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()

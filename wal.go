@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -49,6 +50,9 @@ type Reader struct {
 }
 
 func Open(options Options) (*WAL, error) {
+	if !strings.HasPrefix(options.SementFileExt, ".") {
+		return nil, fmt.Errorf("segment file extension must start with '.'")
+	}
 	wal := &WAL{
 		options:       options,
 		olderSegments: make(map[SegmentID]*segment),
@@ -85,7 +89,7 @@ func Open(options Options) (*WAL, error) {
 			continue
 		}
 		var id int
-		_, err := fmt.Sscanf(entry.Name(), "%d"+segmentFileSuffix, &id)
+		_, err := fmt.Sscanf(entry.Name(), "%d"+options.SementFileExt, &id)
 		if err != nil {
 			continue
 		}
@@ -94,7 +98,8 @@ func Open(options Options) (*WAL, error) {
 
 	// empty directory, just initialize a new segment file.
 	if len(segmengIDs) == 0 {
-		segment, err := openSegmentFile(options.DirPath, initialSegmentFileID, wal.blockCache)
+		segment, err := openSegmentFile(options.DirPath, options.SementFileExt,
+			initialSegmentFileID, wal.blockCache)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +109,8 @@ func Open(options Options) (*WAL, error) {
 		sort.Ints(segmengIDs)
 
 		for i, segId := range segmengIDs {
-			segment, err := openSegmentFile(options.DirPath, uint32(segId), wal.blockCache)
+			segment, err := openSegmentFile(options.DirPath, options.SementFileExt,
+				uint32(segId), wal.blockCache)
 			if err != nil {
 				return nil, err
 			}
@@ -133,7 +139,8 @@ func (wal *WAL) OpenNewActiveSegment() error {
 		return err
 	}
 	// create a new segment file and set it as the active one.
-	segment, err := openSegmentFile(wal.options.DirPath, wal.activeSegment.id+1, wal.blockCache)
+	segment, err := openSegmentFile(wal.options.DirPath, wal.options.SementFileExt,
+		wal.activeSegment.id+1, wal.blockCache)
 	if err != nil {
 		return err
 	}
@@ -215,7 +222,8 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 			return nil, err
 		}
 
-		segment, err := openSegmentFile(wal.options.DirPath, wal.activeSegment.id+1, wal.blockCache)
+		segment, err := openSegmentFile(wal.options.DirPath, wal.options.SementFileExt,
+			wal.activeSegment.id+1, wal.blockCache)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +268,7 @@ func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 	}
 
 	if segment == nil {
-		return nil, fmt.Errorf("segment file %d%s not found", pos.SegmentId, segmentFileSuffix)
+		return nil, fmt.Errorf("segment file %d%s not found", pos.SegmentId, wal.options.SementFileExt)
 	}
 
 	// read the data from the segment file.
