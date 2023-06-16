@@ -142,6 +142,14 @@ func (wal *WAL) OpenNewActiveSegment() error {
 	return nil
 }
 
+// ActiveSegmentID returns the id of the active segment file.
+func (wal *WAL) ActiveSegmentID() SegmentID {
+	wal.mu.RLock()
+	defer wal.mu.RUnlock()
+
+	return wal.activeSegment.id
+}
+
 // NewReaderWithMax returns a new reader for the WAL,
 // and the reader will only read the data from the segment file
 // whose id is less than or equal to the given segId.
