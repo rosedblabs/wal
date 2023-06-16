@@ -73,6 +73,28 @@ func TestWAL_Write_large2(t *testing.T) {
 	testWriteAndIterate(t, wal, 2000, 32*1024*3+10)
 }
 
+func TestWAL_OpenNewActiveSegment(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-new-active-segment")
+	opts := Options{
+		DirPath:     dir,
+		SegmentSize: 32 * 1024 * 1024,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyWAL(wal)
+
+	testWriteAndIterate(t, wal, 2000, 512)
+	err = wal.OpenNewActiveSegment()
+	assert.Nil(t, err)
+
+	val := strings.Repeat("wal", 100)
+	for i := 0; i < 100; i++ {
+		pos, err := wal.Write([]byte(val))
+		assert.Nil(t, err)
+		assert.NotNil(t, pos)
+	}
+}
+
 func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
 	val := strings.Repeat("wal", valueSize)
 	totalWrite := 0.0
