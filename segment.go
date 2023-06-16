@@ -303,14 +303,14 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		copy(header, block[chunkOffset:chunkOffset+chunkHeaderSize])
 
 		// length
-		legnth := binary.LittleEndian.Uint16(header[4:6])
+		length := binary.LittleEndian.Uint16(header[4:6])
 
 		// copy data
 		start := chunkOffset + chunkHeaderSize
-		result = append(result, block[start:start+int64(legnth)]...)
+		result = append(result, block[start:start+int64(length)]...)
 
 		// check sum
-		checksumEnd := chunkOffset + chunkHeaderSize + int64(legnth)
+		checksumEnd := chunkOffset + chunkHeaderSize + int64(length)
 		checksum := crc32.ChecksumIEEE(block[chunkOffset+4 : checksumEnd])
 		savedSum := binary.LittleEndian.Uint32(header[:4])
 		if savedSum != checksum {
