@@ -119,18 +119,50 @@ func Open(options Options) (*WAL, error) {
 	return wal, nil
 }
 
-func (wal *WAL) NewReader() *Reader {
+// OpenNewActiveSegment opens a new segment file
+// and sets it as the active segment file.
+// It is used when even the active segment file is not full,
+// but the user wants to create a new segment file.
+//
+// It is now used by Merge operation of rosedb, not a common usage for most users.
+func (wal *WAL) OpenNewActiveSegment() error {
+	wal.mu.Lock()
+	defer wal.mu.Unlock()
+	// sync the active segment file.
+	if err := wal.activeSegment.Sync(); err != nil {
+		return err
+	}
+	// create a new segment file and set it as the active one.
+	segment, err := openSegmentFile(wal.options.DirPath, wal.activeSegment.id+1, wal.blockCache)
+	if err != nil {
+		return err
+	}
+	wal.olderSegments[wal.activeSegment.id] = wal.activeSegment
+	wal.activeSegment = segment
+	return nil
+}
+
+// NewReaderWithMax returns a new reader for the WAL,
+// and the reader will only read the data from the segment file
+// whose id is less than or equal to the given segId.
+//
+// It is now used by the Merge operation of rosedb, not a common usage for most users.
+func (wal *WAL) NewReaderWithMax(segId SegmentID) *Reader {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
 
 	// get all segment readers.
 	var segmentReaders []*segmentReader
 	for _, segment := range wal.olderSegments {
-		reader := segment.NewReader()
+		if segId == 0 || segment.id <= segId {
+			reader := segment.NewReader()
+			segmentReaders = append(segmentReaders, reader)
+		}
+	}
+	if segId == 0 || wal.activeSegment.id <= segId {
+		reader := wal.activeSegment.NewReader()
 		segmentReaders = append(segmentReaders, reader)
 	}
-	reader := wal.activeSegment.NewReader()
-	segmentReaders = append(segmentReaders, reader)
 
 	// sort the segment readers by segment id.
 	sort.Slice(segmentReaders, func(i, j int) bool {
@@ -141,6 +173,11 @@ func (wal *WAL) NewReader() *Reader {
 		segmentReaders: segmentReaders,
 		currentReader:  0,
 	}
+}
+
+// NewReader returns a new reader for the WAL.
+func (wal *WAL) NewReader() *Reader {
+	return wal.NewReaderWithMax(0)
 }
 
 // Next returns the next chunk data and its position in the WAL.
