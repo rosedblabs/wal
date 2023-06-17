@@ -17,7 +17,7 @@ const (
 )
 
 var (
-	ErrTooLarge = errors.New("the data size can't larger than sigment size")
+	ErrValueTooLarge = errors.New("the data size can't larger than segment size")
 )
 
 // WAL represents a Write-Ahead Log structure that provides durability
@@ -221,7 +221,7 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
 	if int64(len(data))+chunkHeaderSize > wal.options.SegmentSize {
-		return nil, ErrTooLarge
+		return nil, ErrValueTooLarge
 	}
 	// if the active segment file is full, sync it and create a new one.
 	if wal.isFull(int64(len(data))) {
