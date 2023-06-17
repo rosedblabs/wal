@@ -49,7 +49,6 @@ type segment struct {
 	currentBlockSize   uint32
 	closed             bool
 	cache              *lru.Cache[uint64, []byte]
-	size               int64
 }
 
 // segmentReader is used to iterate all the data from the segment file.
@@ -98,7 +97,6 @@ func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64
 		cache:              cache,
 		currentBlockNumber: uint32(offset / blockSize),
 		currentBlockSize:   uint32(offset % blockSize),
-		size:               offset,
 	}, nil
 }
 
@@ -155,7 +153,6 @@ func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 		}
 
 		// A new block, clear the current block size.
-		seg.size += int64(blockSize - seg.currentBlockSize)
 		seg.currentBlockNumber += 1
 		seg.currentBlockSize = 0
 	}
@@ -248,7 +245,6 @@ func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 		seg.currentBlockNumber += 1
 		seg.currentBlockSize = 0
 	}
-	seg.size += int64(dataSize) + chunkHeaderSize
 	return nil
 }
 
@@ -261,7 +257,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 	if seg.closed {
 		return nil, nil, ErrClosed
 	}
-
+	segSize := seg.Size()
 	var (
 		result    []byte
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
@@ -269,8 +265,8 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 	for {
 		size := int64(blockSize)
 		offset := int64(blockNumber * blockSize)
-		if size+offset > seg.size {
-			size = seg.size - offset
+		if size+offset > segSize {
+			size = segSize - offset
 		}
 
 		if chunkOffset >= size {
