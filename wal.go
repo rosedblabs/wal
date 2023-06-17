@@ -157,6 +157,16 @@ func (wal *WAL) ActiveSegmentID() SegmentID {
 	return wal.activeSegment.id
 }
 
+// IsEmpty returns whether the WAL is empty.
+// Only there is only one active segment file and it is empty,
+// the WAL is empty.
+func (wal *WAL) IsEmpty() bool {
+	wal.mu.RLock()
+	defer wal.mu.RUnlock()
+
+	return len(wal.olderSegments) == 0 && wal.activeSegment.Size() == 0
+}
+
 // NewReaderWithMax returns a new reader for the WAL,
 // and the reader will only read the data from the segment file
 // whose id is less than or equal to the given segId.
