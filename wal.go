@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -123,6 +124,11 @@ func Open(options Options) (*WAL, error) {
 	}
 
 	return wal, nil
+}
+
+// SegmentFileName returns the file name of a segment file.
+func SegmentFileName(dirPath string, extName string, id SegmentID) string {
+	return filepath.Join(dirPath, fmt.Sprintf("%09d"+extName, id))
 }
 
 // OpenNewActiveSegment opens a new segment file

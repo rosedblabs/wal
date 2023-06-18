@@ -7,7 +7,6 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
-	"path/filepath"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 )
@@ -74,9 +73,8 @@ type ChunkPosition struct {
 
 // openSegmentFile a new segment file.
 func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64, []byte]) (*segment, error) {
-	fileName := fmt.Sprintf("%09d"+extName, id)
 	fd, err := os.OpenFile(
-		filepath.Join(dirPath, fileName),
+		SegmentFileName(dirPath, extName, id),
 		os.O_CREATE|os.O_RDWR|os.O_APPEND,
 		fileModePerm,
 	)
