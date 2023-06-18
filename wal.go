@@ -228,6 +228,12 @@ func (r *Reader) Next() ([]byte, *ChunkPosition, error) {
 	return data, position, err
 }
 
+// CurrentSegmentId returns the id of the current segment file
+// when reading the WAL.
+func (r *Reader) CurrentSegmentId() SegmentID {
+	return r.segmentReaders[r.currentReader].segment.id
+}
+
 func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
