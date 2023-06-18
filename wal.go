@@ -228,6 +228,14 @@ func (r *Reader) Next() ([]byte, *ChunkPosition, error) {
 	return data, position, err
 }
 
+// SkipCurrentSegment skips the current segment file
+// when reading the WAL.
+//
+// It is now used by the Merge operation of rosedb, not a common usage for most users.
+func (r *Reader) SkipCurrentSegment() {
+	r.currentReader++
+}
+
 // CurrentSegmentId returns the id of the current segment file
 // when reading the WAL.
 func (r *Reader) CurrentSegmentId() SegmentID {
