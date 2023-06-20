@@ -255,9 +255,10 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 	if seg.closed {
 		return nil, nil, ErrClosed
 	}
-	segSize := seg.Size()
+
 	var (
 		result    []byte
+		segSize   = seg.Size()
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
 	)
 	for {
