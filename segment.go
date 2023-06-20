@@ -243,7 +243,6 @@ func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 		seg.currentBlockNumber += 1
 		seg.currentBlockSize = 0
 	}
-
 	return nil
 }
 
@@ -256,12 +255,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 	if seg.closed {
 		return nil, nil, ErrClosed
 	}
-
-	segSize, err := seg.fd.Seek(0, io.SeekEnd)
-	if err != nil {
-		return nil, nil, err
-	}
-
+	segSize := seg.Size()
 	var (
 		result    []byte
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
