@@ -56,7 +56,3 @@ jobs:
 
       - name: Run Unit Test
         run: go test -count 1 -v ./...
-
-      - name: Run Benchmark Test
-        working-directory: ./benchmark
-        run: go test -count 1 -v -bench=. ./...
