@@ -1,3 +1,15 @@
+# Release 1.1.0 (2023-06-21)
+
+## 🚀 New Features
+* Add tests in windows, with worlflow.
+* Add some functions to support rosedb Merge operation.
+
+## 🎠 Community
+* Thanks to@SPCDTS
+  * fix: calculate seg fle size by seg.size ([#7](https://github.com/rosedblabs/wal/pull/7))
+  * fix: limit data size ([#6](https://github.com/rosedblabs/wal/pull/6))
+  * fix: spelling error ([#5](https://github.com/rosedblabs/wal/pull/5))
+
 # Release 1.0.0 (2023-06-13)
 
 ## 🚀 New Features
