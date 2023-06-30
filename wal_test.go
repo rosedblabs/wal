@@ -192,3 +192,22 @@ func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
 	}
 	assert.Equal(t, size, count)
 }
+
+func TestDelete(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-write1")
+	opts := Options{
+		DirPath:       dir,
+		SementFileExt: ".SEG",
+		SegmentSize:   32 * 1024 * 1024,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
+	testWriteAndIterate(t, wal, 2000, 512)
+	assert.False(t, wal.IsEmpty())
+	defer destroyWAL(wal)
+
+	wal.Delete()
+
+	wal, err = Open(opts)
+	assert.True(t, wal.IsEmpty())
+}
