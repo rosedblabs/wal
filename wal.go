@@ -333,6 +333,27 @@ func (wal *WAL) Close() error {
 	return wal.activeSegment.Close()
 }
 
+func (wal *WAL) Delete() error {
+	wal.mu.Lock()
+	defer wal.mu.Unlock()
+
+	// purge the block cache.
+	if wal.blockCache != nil {
+		wal.blockCache.Purge()
+	}
+
+	// delete all segment files.
+	for _, segment := range wal.olderSegments {
+		if err := segment.Remove(); err != nil {
+			return err
+		}
+	}
+	wal.olderSegments = nil
+
+	// close the active segment file.
+	return wal.activeSegment.Remove()
+}
+
 func (wal *WAL) Sync() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
