@@ -209,5 +209,6 @@ func TestDelete(t *testing.T) {
 	wal.Delete()
 
 	wal, err = Open(opts)
+	assert.Nil(t, err)
 	assert.True(t, wal.IsEmpty())
 }

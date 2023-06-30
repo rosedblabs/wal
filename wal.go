@@ -247,6 +247,9 @@ func (r *Reader) CurrentSegmentId() SegmentID {
 	return r.segmentReaders[r.currentReader].segment.id
 }
 
+// Write writes the data to the WAL.
+// Actually, it writes the data to the active segment file.
+// It returns the position of the data in the WAL, and an error if any.
 func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
@@ -292,6 +295,7 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	return position, nil
 }
 
+// Read reads the data from the WAL according to the given position.
 func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
@@ -312,6 +316,7 @@ func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 	return segment.Read(pos.BlockNumber, pos.ChunkOffset)
 }
 
+// Close closes the WAL.
 func (wal *WAL) Close() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
@@ -333,6 +338,7 @@ func (wal *WAL) Close() error {
 	return wal.activeSegment.Close()
 }
 
+// Delete deletes all segment files of the WAL.
 func (wal *WAL) Delete() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
@@ -350,10 +356,11 @@ func (wal *WAL) Delete() error {
 	}
 	wal.olderSegments = nil
 
-	// close the active segment file.
+	// delete the active segment file.
 	return wal.activeSegment.Remove()
 }
 
+// Sync syncs the active segment file to stable storage like disk.
 func (wal *WAL) Sync() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
