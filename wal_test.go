@@ -212,3 +212,38 @@ func TestDelete(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, wal.IsEmpty())
 }
+
+func TestWAL_ReaderWithStart(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-wal-reader-with-start")
+	opts := Options{
+		DirPath:       dir,
+		SementFileExt: ".SEG",
+		SegmentSize:   8 * 1024 * 1024,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyWAL(wal)
+
+	_, err = wal.NewReaderWithStart(nil)
+	assert.NotNil(t, err)
+
+	reader1, err := wal.NewReaderWithStart(&ChunkPosition{SegmentId: 0, BlockNumber: 0, ChunkOffset: 100})
+	assert.Nil(t, err)
+	_, _, err = reader1.Next()
+	assert.Equal(t, err, io.EOF)
+
+	testWriteAndIterate(t, wal, 20000, 512)
+	reader2, err := wal.NewReaderWithStart(&ChunkPosition{SegmentId: 0, BlockNumber: 0, ChunkOffset: 0})
+	assert.Nil(t, err)
+	_, pos2, err := reader2.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, pos2.BlockNumber, uint32(0))
+	assert.Equal(t, pos2.ChunkOffset, int64(0))
+
+	reader3, err := wal.NewReaderWithStart(&ChunkPosition{SegmentId: 3, BlockNumber: 5, ChunkOffset: 0})
+	assert.Nil(t, err)
+	_, pos3, err := reader3.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, pos3.SegmentId, uint32(3))
+	assert.Equal(t, pos3.BlockNumber, uint32(5))
+}

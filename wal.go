@@ -211,7 +211,42 @@ func (wal *WAL) NewReaderWithMax(segId SegmentID) *Reader {
 	}
 }
 
+// NewReaderWithStart returns a new reader for the WAL,
+// and the reader will only read the data from the segment file
+// whose position is greater than or equal to the given position.
+func (wal *WAL) NewReaderWithStart(startPos *ChunkPosition) (*Reader, error) {
+	if startPos == nil {
+		return nil, errors.New("start position is nil")
+	}
+	wal.mu.RLock()
+	defer wal.mu.RUnlock()
+
+	reader := wal.NewReader()
+	for {
+		// skip the segment readers whose id is less than the given position's segment id.
+		if reader.CurrentSegmentId() < startPos.SegmentId {
+			reader.SkipCurrentSegment()
+			continue
+		}
+		// skip the chunk whose position is less than the given position.
+		currentPos := reader.CurrentChunkPosition()
+		if currentPos.BlockNumber >= startPos.BlockNumber &&
+			currentPos.ChunkOffset >= startPos.ChunkOffset {
+			break
+		}
+		// call Next to find again.
+		if _, _, err := reader.Next(); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+	}
+	return reader, nil
+}
+
 // NewReader returns a new reader for the WAL.
+// It will iterate all segment files and read all data from them.
 func (wal *WAL) NewReader() *Reader {
 	return wal.NewReaderWithMax(0)
 }
@@ -245,6 +280,16 @@ func (r *Reader) SkipCurrentSegment() {
 // when reading the WAL.
 func (r *Reader) CurrentSegmentId() SegmentID {
 	return r.segmentReaders[r.currentReader].segment.id
+}
+
+// CurrentChunkPosition returns the position of the current chunk data
+func (r *Reader) CurrentChunkPosition() *ChunkPosition {
+	reader := r.segmentReaders[r.currentReader]
+	return &ChunkPosition{
+		SegmentId:   reader.segment.id,
+		BlockNumber: reader.blockNumber,
+		ChunkOffset: reader.chunkOffset,
+	}
 }
 
 // Write writes the data to the WAL.
