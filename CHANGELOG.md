@@ -1,3 +1,12 @@
+# Release 1.2.0 (2023-07-01)
+
+## 🚀 New Features
+* Add `NewReaderWithStart` function to support read log from specified position.
+
+## 🎠 Community
+* Thanks to@yanxiaoqi932
+  * enhancement: add wal delete function ([#7](https://github.com/rosedblabs/wal/pull/9))
+
 # Release 1.1.0 (2023-06-21)
 
 ## 🚀 New Features
