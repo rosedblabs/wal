@@ -15,7 +15,7 @@ type Options struct {
 	// It is used to identify the different types of files in the directory.
 	// Now it is used by rosedb to identify the segment files and hint files.
 	// Not a common usage for most users.
-	SementFileExt string
+	SegmentFileExt string
 
 	// BlockCache specifies the size of the block cache in number of bytes.
 	// A block cache is used to store recently accessed data blocks, improving read performance.
@@ -44,10 +44,10 @@ const (
 )
 
 var DefaultOptions = Options{
-	DirPath:       os.TempDir(),
-	SegmentSize:   GB,
-	SementFileExt: ".SEG",
-	BlockCache:    32 * KB * 10,
-	Sync:          false,
-	BytesPerSync:  0,
+	DirPath:        os.TempDir(),
+	SegmentSize:    GB,
+	SegmentFileExt: ".SEG",
+	BlockCache:     32 * KB * 10,
+	Sync:           false,
+	BytesPerSync:   0,
 }
