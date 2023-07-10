@@ -11,9 +11,9 @@ Write Ahead Log for LSM or bitcask storage, with block cache.
 
 ```
        +-----+-------------+--+----+----------+------+-- ... ----+
- File  | r0  |        r1   |P | r2 |    r3    |  r4  |           |
+ File  | r0  |      r1     |P | r2 |    r3    |  r4  |           |
        +-----+-------------+--+----+----------+------+-- ... ----+
-       <--- BlockSize ------->|<--- BlockSize ------>|
+       |<---- BlockSize ----->|<---- BlockSize ----->|
 
   rn = variable size records
   P = Padding
@@ -23,11 +23,11 @@ Write Ahead Log for LSM or bitcask storage, with block cache.
 **Format of a single record:**
 
 ```
-+---------+-------------+-----------+--- ... ---+
-| CRC (4B)| Length (2B) | Type (1B) | Payload   |
-+---------+-------------+-----------+--- ... ---+
++----------+-------------+-----------+--- ... ---+
+| CRC (4B) | Length (2B) | Type (1B) |  Payload  |
++----------+-------------+-----------+--- ... ---+
 
-CRC = 32bit hash computed over the payload using CRC
+CRC = 32-bit hash computed over the payload using CRC
 Length = Length of the payload data
 Type = Type of record
        (FullType, FirstType, MiddleType, LastType)
@@ -43,7 +43,7 @@ func main() {
 	wal, _ := wal.Open(wal.DefaultOptions)
 	// write some data
 	chunkPosition, _ := wal.Write([]byte("some data 1"))
-	// read by the posistion
+	// read by the position
 	val, _ := wal.Read(chunkPosition)
 	fmt.Println(string(val))
 

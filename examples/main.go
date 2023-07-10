@@ -11,7 +11,7 @@ func main() {
 	wal, _ := wal.Open(wal.DefaultOptions)
 	// write some data
 	chunkPosition, _ := wal.Write([]byte("some data 1"))
-	// read by the posistion
+	// read by the position
 	val, _ := wal.Read(chunkPosition)
 	fmt.Println(string(val))
 
