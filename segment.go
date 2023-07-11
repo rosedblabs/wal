@@ -370,3 +370,51 @@ func (segReader *segmentReader) Next() ([]byte, *ChunkPosition, error) {
 
 	return value, chunkPosition, nil
 }
+
+// Encode encodes the chunk position to a byte slice.
+// You can decode it by calling wal.DecodeChunkPosition().
+func (cp *ChunkPosition) Encode() []byte {
+	maxLen := binary.MaxVarintLen32*3 + binary.MaxVarintLen64
+	buf := make([]byte, maxLen)
+
+	var index = 0
+	// SegmentId
+	index += binary.PutUvarint(buf[index:], uint64(cp.SegmentId))
+	// BlockNumber
+	index += binary.PutUvarint(buf[index:], uint64(cp.BlockNumber))
+	// ChunkOffset
+	index += binary.PutUvarint(buf[index:], uint64(cp.ChunkOffset))
+	// ChunkSize
+	index += binary.PutUvarint(buf[index:], uint64(cp.ChunkSize))
+
+	return buf[:index]
+}
+
+// DecodeChunkPosition decodes the chunk position from a byte slice.
+// You can encode it by calling wal.ChunkPosition.Encode().
+func DecodeChunkPosition(buf []byte) *ChunkPosition {
+	if len(buf) == 0 {
+		return nil
+	}
+
+	var index = 0
+	// SegmentId
+	segmentId, n := binary.Uvarint(buf[index:])
+	index += n
+	// BlockNumber
+	blockNumber, n := binary.Uvarint(buf[index:])
+	index += n
+	// ChunkOffset
+	chunkOffset, n := binary.Uvarint(buf[index:])
+	index += n
+	// ChunkSize
+	chunkSize, n := binary.Uvarint(buf[index:])
+	index += n
+
+	return &ChunkPosition{
+		SegmentId:   uint32(segmentId),
+		BlockNumber: uint32(blockNumber),
+		ChunkOffset: int64(chunkOffset),
+		ChunkSize:   uint32(chunkSize),
+	}
+}

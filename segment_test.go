@@ -2,6 +2,7 @@ package wal
 
 import (
 	"io"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -319,4 +320,17 @@ func TestSegment_Reader_ManyChunks_NOT_FULL(t *testing.T) {
 		i++
 	}
 	assert.Equal(t, 10000, len(values))
+}
+
+func TestChunkPosition_Encode(t *testing.T) {
+	validate := func(pos *ChunkPosition) {
+		res := pos.Encode()
+		assert.NotNil(t, res)
+		decRes := DecodeChunkPosition(res)
+		assert.Equal(t, pos, decRes)
+	}
+
+	validate(&ChunkPosition{1, 2, 3, 100})
+	validate(&ChunkPosition{0, 0, 0, 0})
+	validate(&ChunkPosition{math.MaxUint32, math.MaxUint32, math.MaxInt64, math.MaxUint32})
 }
