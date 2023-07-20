@@ -58,6 +58,7 @@ type segmentReader struct {
 	segment     *segment
 	blockNumber uint32
 	chunkOffset int64
+	block       []byte
 }
 
 // ChunkPosition represents the position of a chunk in a segment file.
@@ -105,6 +106,7 @@ func (seg *segment) NewReader() *segmentReader {
 		segment:     seg,
 		blockNumber: 0,
 		chunkOffset: 0,
+		block:       make([]byte, blockSize),
 	}
 }
 
@@ -250,11 +252,11 @@ func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 }
 
 func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
-	value, _, err := seg.readInternal(blockNumber, chunkOffset)
+	value, _, err := seg.readInternal(nil, blockNumber, chunkOffset)
 	return value, err
 }
 
-func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte, *ChunkPosition, error) {
+func (seg *segment) readInternal(block []byte, blockNumber uint32, chunkOffset int64) ([]byte, *ChunkPosition, error) {
 	if seg.closed {
 		return nil, nil, ErrClosed
 	}
@@ -276,14 +278,19 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		}
 
 		// read an entire block
-		var block []byte
 		var ok bool
 		if seg.cache != nil {
-			block, ok = seg.cache.Get(seg.getCacheKey(blockNumber))
+			var cachedBlock []byte
+			cachedBlock, ok = seg.cache.Get(seg.getCacheKey(blockNumber))
+			if ok {
+				copy(block, cachedBlock)
+			}
 		}
 		// cache miss, read from the segment file
 		if !ok || len(block) == 0 {
-			block = make([]byte, size)
+			if len(block) == 0 || size < int64(len(block)) {
+				block = make([]byte, size)
+			}
 			_, err := seg.fd.ReadAt(block, offset)
 			if err != nil {
 				return nil, nil, err
@@ -353,6 +360,7 @@ func (segReader *segmentReader) Next() ([]byte, *ChunkPosition, error) {
 	}
 
 	value, nextChunk, err := segReader.segment.readInternal(
+		segReader.block,
 		segReader.blockNumber,
 		segReader.chunkOffset,
 	)
