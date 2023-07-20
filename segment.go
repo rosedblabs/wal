@@ -48,6 +48,7 @@ type segment struct {
 	currentBlockSize   uint32
 	closed             bool
 	cache              *lru.Cache[uint64, []byte]
+	header             []byte
 }
 
 // segmentReader is used to iterate all the data from the segment file.
@@ -93,6 +94,7 @@ func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64
 		id:                 id,
 		fd:                 fd,
 		cache:              cache,
+		header:             make([]byte, chunkHeaderSize),
 		currentBlockNumber: uint32(offset / blockSize),
 		currentBlockSize:   uint32(offset % blockSize),
 	}, nil
@@ -215,20 +217,21 @@ func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 
 func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 	dataSize := uint32(len(data))
-	buf := make([]byte, dataSize+chunkHeaderSize)
 
 	// Length	2 Bytes	index:4-5
-	binary.LittleEndian.PutUint16(buf[4:6], uint16(dataSize))
+	binary.LittleEndian.PutUint16(seg.header[4:6], uint16(dataSize))
 	// Type	1 Byte	index:6
-	buf[6] = chunkType
-	// data N Bytes index:7-end
-	copy(buf[7:], data)
+	seg.header[6] = chunkType
 	// Checksum	4 Bytes index:0-3
-	sum := crc32.ChecksumIEEE(buf[4:])
-	binary.LittleEndian.PutUint32(buf[:4], sum)
+	sum := crc32.ChecksumIEEE(seg.header[4:])
+	sum = crc32.Update(sum, crc32.IEEETable, data)
+	binary.LittleEndian.PutUint32(seg.header[:4], sum)
 
 	// append to the file
-	if _, err := seg.fd.Write(buf); err != nil {
+	if _, err := seg.fd.Write(seg.header); err != nil {
+		return err
+	}
+	if _, err := seg.fd.Write(data); err != nil {
 		return err
 	}
 
