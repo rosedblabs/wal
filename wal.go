@@ -60,7 +60,7 @@ func Open(options Options) (*WAL, error) {
 		return nil, fmt.Errorf("segment file extension must start with '.'")
 	}
 	if options.BlockCache > uint32(options.SegmentSize) {
-		return nil, fmt.Errorf("BlockCache must smaller than SegmentSize")
+		return nil, fmt.Errorf("BlockCache must be smaller than SegmentSize")
 	}
 	wal := &WAL{
 		options:       options,
