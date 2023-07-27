@@ -59,6 +59,9 @@ func Open(options Options) (*WAL, error) {
 	if !strings.HasPrefix(options.SegmentFileExt, ".") {
 		return nil, fmt.Errorf("segment file extension must start with '.'")
 	}
+	if options.BlockCache > uint32(options.SegmentSize) {
+		return nil, fmt.Errorf("BlockCache must be smaller than SegmentSize")
+	}
 	wal := &WAL{
 		options:       options,
 		olderSegments: make(map[SegmentID]*segment),
