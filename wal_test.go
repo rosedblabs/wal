@@ -22,6 +22,7 @@ func TestWAL_Write(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -55,6 +56,7 @@ func TestWAL_Write_large(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -122,6 +124,7 @@ func TestWAL_Reader(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -199,6 +202,7 @@ func TestDelete(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -206,7 +210,8 @@ func TestDelete(t *testing.T) {
 	assert.False(t, wal.IsEmpty())
 	defer destroyWAL(wal)
 
-	wal.Delete()
+	err = wal.Delete()
+	assert.Nil(t, err)
 
 	wal, err = Open(opts)
 	assert.Nil(t, err)
@@ -219,6 +224,7 @@ func TestWAL_ReaderWithStart(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    8 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)

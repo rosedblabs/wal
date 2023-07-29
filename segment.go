@@ -7,6 +7,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 )
@@ -49,6 +50,7 @@ type segment struct {
 	closed             bool
 	cache              *lru.Cache[uint64, []byte]
 	header             []byte
+	blockPool          sync.Pool
 }
 
 // segmentReader is used to iterate all the data from the segment file.
@@ -58,6 +60,12 @@ type segmentReader struct {
 	segment     *segment
 	blockNumber uint32
 	chunkOffset int64
+}
+
+// block and chunk header, saved in pool.
+type blockAndHeader struct {
+	block  []byte
+	header []byte
 }
 
 // ChunkPosition represents the position of a chunk in a segment file.
@@ -95,9 +103,17 @@ func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64
 		fd:                 fd,
 		cache:              cache,
 		header:             make([]byte, chunkHeaderSize),
+		blockPool:          sync.Pool{New: newBlockAndHeader},
 		currentBlockNumber: uint32(offset / blockSize),
 		currentBlockSize:   uint32(offset % blockSize),
 	}, nil
+}
+
+func newBlockAndHeader() interface{} {
+	return &blockAndHeader{
+		block:  make([]byte, blockSize),
+		header: make([]byte, chunkHeaderSize),
+	}
 }
 
 func (seg *segment) NewReader() *segmentReader {
@@ -261,9 +277,14 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 
 	var (
 		result    []byte
+		bh        = seg.blockPool.Get().(*blockAndHeader)
 		segSize   = seg.Size()
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
 	)
+	defer func() {
+		seg.blockPool.Put(bh)
+	}()
+
 	for {
 		size := int64(blockSize)
 		offset := int64(blockNumber * blockSize)
@@ -275,16 +296,18 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 			return nil, nil, io.EOF
 		}
 
-		// read an entire block
-		var block []byte
 		var ok bool
+		var cachedBlock []byte
+		// try to read from the cache if it is enabled
 		if seg.cache != nil {
-			block, ok = seg.cache.Get(seg.getCacheKey(blockNumber))
+			cachedBlock, ok = seg.cache.Get(seg.getCacheKey(blockNumber))
 		}
-		// cache miss, read from the segment file
-		if !ok || len(block) == 0 {
-			block = make([]byte, size)
-			_, err := seg.fd.ReadAt(block, offset)
+		// cache hit, get block from the cache
+		if ok {
+			copy(bh.block, cachedBlock)
+		} else {
+			// cache miss, read block from the segment file
+			_, err := seg.fd.ReadAt(bh.block[0:size], offset)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -292,31 +315,32 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 			// if the block size is smaller than blockSize, it means that the block is not full,
 			// so we will not cache it.
 			if seg.cache != nil && size == blockSize {
-				seg.cache.Add(seg.getCacheKey(blockNumber), block)
+				cacheBlock := make([]byte, blockSize)
+				copy(cacheBlock, bh.block)
+				seg.cache.Add(seg.getCacheKey(blockNumber), cacheBlock)
 			}
 		}
 
 		// header
-		header := make([]byte, chunkHeaderSize)
-		copy(header, block[chunkOffset:chunkOffset+chunkHeaderSize])
+		copy(bh.header, bh.block[chunkOffset:chunkOffset+chunkHeaderSize])
 
 		// length
-		length := binary.LittleEndian.Uint16(header[4:6])
+		length := binary.LittleEndian.Uint16(bh.header[4:6])
 
 		// copy data
 		start := chunkOffset + chunkHeaderSize
-		result = append(result, block[start:start+int64(length)]...)
+		result = append(result, bh.block[start:start+int64(length)]...)
 
 		// check sum
 		checksumEnd := chunkOffset + chunkHeaderSize + int64(length)
-		checksum := crc32.ChecksumIEEE(block[chunkOffset+4 : checksumEnd])
-		savedSum := binary.LittleEndian.Uint32(header[:4])
+		checksum := crc32.ChecksumIEEE(bh.block[chunkOffset+4 : checksumEnd])
+		savedSum := binary.LittleEndian.Uint32(bh.header[:4])
 		if savedSum != checksum {
 			return nil, nil, ErrInvalidCRC
 		}
 
 		// type
-		chunkType := header[6]
+		chunkType := bh.header[6]
 
 		if chunkType == ChunkTypeFull || chunkType == ChunkTypeLast {
 			nextChunk.BlockNumber = blockNumber
