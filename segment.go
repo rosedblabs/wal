@@ -7,7 +7,6 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
-	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 )
@@ -50,7 +49,6 @@ type segment struct {
 	closed             bool
 	cache              *lru.Cache[uint64, []byte]
 	header             []byte
-	blockPool          sync.Pool
 }
 
 // segmentReader is used to iterate all the data from the segment file.
@@ -97,14 +95,9 @@ func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64
 		fd:                 fd,
 		cache:              cache,
 		header:             make([]byte, chunkHeaderSize),
-		blockPool:          sync.Pool{New: newBlock},
 		currentBlockNumber: uint32(offset / blockSize),
 		currentBlockSize:   uint32(offset % blockSize),
 	}, nil
-}
-
-func newBlock() interface{} {
-	return make([]byte, blockSize)
 }
 
 func (seg *segment) NewReader() *segmentReader {
@@ -271,12 +264,6 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		segSize   = seg.Size()
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
 	)
-
-	// read an entire block
-	var block []byte
-	defer func() {
-		seg.blockPool.Put(block)
-	}()
 	for {
 		size := int64(blockSize)
 		offset := int64(blockNumber * blockSize)
@@ -288,16 +275,16 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 			return nil, nil, io.EOF
 		}
 
+		// read an entire block
+		var block []byte
 		var ok bool
 		if seg.cache != nil {
 			block, ok = seg.cache.Get(seg.getCacheKey(blockNumber))
 		}
 		// cache miss, read from the segment file
-		if !ok {
-			if len(block) == 0 {
-				block = seg.blockPool.Get().([]byte)
-			}
-			_, err := seg.fd.ReadAt(block[:size], offset)
+		if !ok || len(block) == 0 {
+			block = make([]byte, size)
+			_, err := seg.fd.ReadAt(block, offset)
 			if err != nil {
 				return nil, nil, err
 			}
