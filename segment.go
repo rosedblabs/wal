@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/valyala/bytebufferpool"
 )
 
 type ChunkType = byte
@@ -276,13 +277,15 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 	}
 
 	var (
-		result    []byte
+		result    = bytebufferpool.Get()
 		bh        = seg.blockPool.Get().(*blockAndHeader)
 		segSize   = seg.Size()
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
 	)
 	defer func() {
 		seg.blockPool.Put(bh)
+		result.Reset()
+		bytebufferpool.Put(result)
 	}()
 
 	for {
@@ -329,7 +332,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 
 		// copy data
 		start := chunkOffset + chunkHeaderSize
-		result = append(result, bh.block[start:start+int64(length)]...)
+		result.B = append(result.B, bh.block[start:start+int64(length)]...)
 
 		// check sum
 		checksumEnd := chunkOffset + chunkHeaderSize + int64(length)
@@ -356,7 +359,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		blockNumber += 1
 		chunkOffset = 0
 	}
-	return result, nextChunk, nil
+	return result.Bytes(), nextChunk, nil
 }
 
 func (seg *segment) getCacheKey(blockNumber uint32) uint64 {
