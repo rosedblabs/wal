@@ -92,7 +92,7 @@ func Open(options Options) (*WAL, error) {
 	}
 
 	// get all segment file ids.
-	var segmengIDs []int
+	var segmentIDs []int
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -102,11 +102,11 @@ func Open(options Options) (*WAL, error) {
 		if err != nil {
 			continue
 		}
-		segmengIDs = append(segmengIDs, id)
+		segmentIDs = append(segmentIDs, id)
 	}
 
 	// empty directory, just initialize a new segment file.
-	if len(segmengIDs) == 0 {
+	if len(segmentIDs) == 0 {
 		segment, err := openSegmentFile(options.DirPath, options.SegmentFileExt,
 			initialSegmentFileID, wal.blockCache)
 		if err != nil {
@@ -115,15 +115,15 @@ func Open(options Options) (*WAL, error) {
 		wal.activeSegment = segment
 	} else {
 		// open the segment files in order, get the max one as the active segment file.
-		sort.Ints(segmengIDs)
+		sort.Ints(segmentIDs)
 
-		for i, segId := range segmengIDs {
+		for i, segId := range segmentIDs {
 			segment, err := openSegmentFile(options.DirPath, options.SegmentFileExt,
 				uint32(segId), wal.blockCache)
 			if err != nil {
 				return nil, err
 			}
-			if i == len(segmengIDs)-1 {
+			if i == len(segmentIDs)-1 {
 				wal.activeSegment = segment
 			} else {
 				wal.olderSegments[segment.id] = segment
