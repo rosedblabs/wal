@@ -116,6 +116,9 @@ func newBlockAndHeader() interface{} {
 	}
 }
 
+// NewReader creates a new segment reader.
+// You can call Next to get the next chunk data,
+// and io.EOF will be returned when there is no data.
 func (seg *segment) NewReader() *segmentReader {
 	return &segmentReader{
 		segment:     seg,
@@ -124,6 +127,7 @@ func (seg *segment) NewReader() *segmentReader {
 	}
 }
 
+// Sync flushes the segment file to disk.
 func (seg *segment) Sync() error {
 	if seg.closed {
 		return nil
@@ -131,6 +135,7 @@ func (seg *segment) Sync() error {
 	return seg.fd.Sync()
 }
 
+// Remove removes the segment file.
 func (seg *segment) Remove() error {
 	if !seg.closed {
 		seg.closed = true
@@ -140,6 +145,7 @@ func (seg *segment) Remove() error {
 	return os.Remove(seg.fd.Name())
 }
 
+// Close closes the segment file.
 func (seg *segment) Close() error {
 	if seg.closed {
 		return nil
@@ -149,10 +155,17 @@ func (seg *segment) Close() error {
 	return seg.fd.Close()
 }
 
+// Size returns the size of the segment file.
 func (seg *segment) Size() int64 {
 	return int64(seg.currentBlockNumber*blockSize + seg.currentBlockSize)
 }
 
+// Write writes the data to the segment file.
+// The data will be written in chunks, and the chunk has four types:
+// ChunkTypeFull, ChunkTypeFirst, ChunkTypeMiddle, ChunkTypeLast.
+//
+// Each chunk has a header, and the header contains the length, type and checksum.
+// And the payload of the chunk is the real data you want to write.
 func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 	if seg.closed {
 		return nil, ErrClosed
@@ -265,6 +278,7 @@ func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 	return nil
 }
 
+// Read reads the data from the segment file by the block number and chunk offset.
 func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
 	value, _, err := seg.readInternal(blockNumber, chunkOffset)
 	return value, err
@@ -363,6 +377,8 @@ func (seg *segment) getCacheKey(blockNumber uint32) uint64 {
 	return uint64(seg.id)<<32 | uint64(blockNumber)
 }
 
+// Next returns the next chunk data.
+// You can call it repeatedly until io.EOF is returned.
 func (segReader *segmentReader) Next() ([]byte, *ChunkPosition, error) {
 	// The segment file is closed
 	if segReader.segment.closed {

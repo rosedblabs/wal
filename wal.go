@@ -55,6 +55,9 @@ type Reader struct {
 	currentReader  int
 }
 
+// Open opens a WAL with the given options.
+// It will create the directory if not exists, and open all segment files in the directory.
+// If there is no segment file in the directory, it will create a new one.
 func Open(options Options) (*WAL, error) {
 	if !strings.HasPrefix(options.SegmentFileExt, ".") {
 		return nil, fmt.Errorf("segment file extension must start with '.'")
