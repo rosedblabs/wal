@@ -1,4 +1,9 @@
-# Release 1.3.0 (2023-08-04)
+# Release 1.3.2 (2023-08-07)
+
+## 🎄 Enhancements
+* Enhancement: use bufferpool to aviod writing twice https://github.com/rosedblabs/wal/commit/1345f5013113781c59ddaca36ddb13bdcc58ce27
+
+# Release 1.3.1 (2023-08-04)
 
 ## 🐞 Bug Fixes
 * Add a condition to avoid cache repeatedly https://github.com/rosedblabs/wal/commit/cb708139c877b1ef102c0be057ba33cb4af6abb2
