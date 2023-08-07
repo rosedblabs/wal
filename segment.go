@@ -9,6 +9,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/valyala/bytebufferpool"
+
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -256,11 +258,14 @@ func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 	sum = crc32.Update(sum, crc32.IEEETable, data)
 	binary.LittleEndian.PutUint32(seg.header[:4], sum)
 
-	// append to the file
-	if _, err := seg.fd.Write(seg.header); err != nil {
-		return err
-	}
-	if _, err := seg.fd.Write(data); err != nil {
+	// append the header and data to segment file
+	buf := bytebufferpool.Get()
+	defer func() {
+		bytebufferpool.Put(buf)
+	}()
+	buf.B = append(buf.B, seg.header...)
+	buf.B = append(buf.B, data...)
+	if _, err := seg.fd.Write(buf.Bytes()); err != nil {
 		return err
 	}
 
