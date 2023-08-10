@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -30,6 +31,16 @@ func BenchmarkWAL_Write(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, err := walFile.Write([]byte("Hello World"))
+		assert.Nil(b, err)
+	}
+}
+
+func BenchmarkWAL_WriteBig(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := walFile.Write([]byte(strings.Repeat("X", 256*wal.KB+500)))
 		assert.Nil(b, err)
 	}
 }
