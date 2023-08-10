@@ -251,6 +251,7 @@ func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 	}
 
 	position.ChunkSize = blockCount*chunkHeaderSize + dataSize
+
 	return position, nil
 }
 
