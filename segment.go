@@ -228,15 +228,17 @@ func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 		}
 
 		// write the chunks
+		var ct ChunkType
 		switch leftSize {
 		case dataSize: // First chunk
-			seg.appendChunkBuffer(data[dataSize-leftSize:end], ChunkTypeFirst)
+			ct = ChunkTypeFirst
 		case chunkSize: // Last chunk
-			seg.appendChunkBuffer(data[dataSize-leftSize:end], ChunkTypeLast)
+			ct = ChunkTypeLast
 		default: // Middle chunk
-			seg.appendChunkBuffer(data[dataSize-leftSize:end], ChunkTypeMiddle)
+			ct = ChunkTypeMiddle
 		}
 
+		seg.appendChunkBuffer(data[dataSize-leftSize:end], ct)
 		leftSize -= chunkSize
 		blockCount += 1
 		currBlockSize = (currBlockSize + chunkSize + chunkHeaderSize) % blockSize
@@ -281,10 +283,10 @@ func (seg *segment) flushChunkBuffer() error {
 	// update the corresponding fields
 	seg.currentBlockSize += uint32(len(seg.chunkBuffer))
 
+	// calculate the new offsets
 	if seg.currentBlockSize >= blockSize {
-		sub := seg.currentBlockSize - blockSize
-		seg.currentBlockNumber += 1 + (sub / blockSize)
-		seg.currentBlockSize = sub % blockSize
+		seg.currentBlockNumber += seg.currentBlockSize / blockSize
+		seg.currentBlockSize = seg.currentBlockSize % blockSize
 	}
 
 	seg.chunkBuffer = seg.chunkBuffer[:0]

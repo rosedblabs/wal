@@ -38,9 +38,9 @@ func BenchmarkWAL_Write(b *testing.B) {
 func BenchmarkWAL_WriteBig(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
-
+	content := []byte(strings.Repeat("X", 256*wal.KB+500))
 	for i := 0; i < b.N; i++ {
-		_, err := walFile.Write([]byte(strings.Repeat("X", 256*wal.KB+500)))
+		_, err := walFile.Write(content)
 		assert.Nil(b, err)
 	}
 }
