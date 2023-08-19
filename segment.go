@@ -9,8 +9,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/valyala/bytebufferpool"
-
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -52,6 +50,7 @@ type segment struct {
 	closed             bool
 	cache              *lru.Cache[uint64, []byte]
 	header             []byte
+	chunkBuffer        []byte
 	blockPool          sync.Pool
 }
 
@@ -105,6 +104,7 @@ func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64
 		fd:                 fd,
 		cache:              cache,
 		header:             make([]byte, chunkHeaderSize),
+		chunkBuffer:        make([]byte, 0, blockSize),
 		blockPool:          sync.Pool{New: newBlockAndHeader},
 		currentBlockNumber: uint32(offset / blockSize),
 		currentBlockSize:   uint32(offset % blockSize),
@@ -195,58 +195,66 @@ func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
 		ChunkOffset: int64(seg.currentBlockSize),
 	}
 	dataSize := uint32(len(data))
+
 	// The entire chunk can fit into the block.
 	if seg.currentBlockSize+dataSize+chunkHeaderSize <= blockSize {
-		err := seg.writeInternal(data, ChunkTypeFull)
+		seg.appendChunkBuffer(data, ChunkTypeFull)
+		err := seg.flushChunkBuffer()
 		if err != nil {
 			return nil, err
 		}
+
 		position.ChunkSize = dataSize + chunkHeaderSize
 		return position, nil
 	}
 
 	// If the size of the data exceeds the size of the block,
 	// the data should be written to the block in batches.
-	var leftSize = dataSize
-	var blockCount uint32 = 0
+	var (
+		leftSize             = dataSize
+		blockCount    uint32 = 0
+		currBlockSize        = seg.currentBlockSize
+	)
+
 	for leftSize > 0 {
-		chunkSize := blockSize - seg.currentBlockSize - chunkHeaderSize
+		chunkSize := blockSize - currBlockSize - chunkHeaderSize
 		if chunkSize > leftSize {
 			chunkSize = leftSize
 		}
-		chunk := make([]byte, chunkSize)
 
 		var end = dataSize - leftSize + chunkSize
 		if end > dataSize {
 			end = dataSize
 		}
 
-		copy(chunk[:], data[dataSize-leftSize:end])
-
 		// write the chunks
-		var err error
-		if leftSize == dataSize {
-			// First Chunk
-			err = seg.writeInternal(chunk, ChunkTypeFirst)
-		} else if leftSize == chunkSize {
-			// Last Chunk
-			err = seg.writeInternal(chunk, ChunkTypeLast)
-		} else {
-			// Middle Chunk
-			err = seg.writeInternal(chunk, ChunkTypeMiddle)
+		var ct ChunkType
+		switch leftSize {
+		case dataSize: // First chunk
+			ct = ChunkTypeFirst
+		case chunkSize: // Last chunk
+			ct = ChunkTypeLast
+		default: // Middle chunk
+			ct = ChunkTypeMiddle
 		}
-		if err != nil {
-			return nil, err
-		}
+
+		seg.appendChunkBuffer(data[dataSize-leftSize:end], ct)
 		leftSize -= chunkSize
 		blockCount += 1
+		currBlockSize = (currBlockSize + chunkSize + chunkHeaderSize) % blockSize
+	}
+
+	err := seg.flushChunkBuffer()
+	if err != nil {
+		return nil, err
 	}
 
 	position.ChunkSize = blockCount*chunkHeaderSize + dataSize
+
 	return position, nil
 }
 
-func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
+func (seg *segment) appendChunkBuffer(data []byte, chunkType ChunkType) {
 	dataSize := uint32(len(data))
 
 	// Length	2 Bytes	index:4-5
@@ -259,27 +267,30 @@ func (seg *segment) writeInternal(data []byte, chunkType ChunkType) error {
 	binary.LittleEndian.PutUint32(seg.header[:4], sum)
 
 	// append the header and data to segment file
-	buf := bytebufferpool.Get()
-	defer func() {
-		bytebufferpool.Put(buf)
-	}()
-	buf.B = append(buf.B, seg.header...)
-	buf.B = append(buf.B, data...)
-	if _, err := seg.fd.Write(buf.Bytes()); err != nil {
-		return err
-	}
+	seg.chunkBuffer = append(seg.chunkBuffer, seg.header...)
+	seg.chunkBuffer = append(seg.chunkBuffer, data...)
+}
 
+func (seg *segment) flushChunkBuffer() error {
 	if seg.currentBlockSize > blockSize {
 		panic("wrong! can not exceed the block size")
 	}
 
-	// update the corresponding fields
-	seg.currentBlockSize += dataSize + chunkHeaderSize
-	// A new block
-	if seg.currentBlockSize == blockSize {
-		seg.currentBlockNumber += 1
-		seg.currentBlockSize = 0
+	if _, err := seg.fd.Write(seg.chunkBuffer); err != nil {
+		return err
 	}
+
+	// update the corresponding fields
+	seg.currentBlockSize += uint32(len(seg.chunkBuffer))
+
+	// calculate the new offsets
+	if seg.currentBlockSize >= blockSize {
+		seg.currentBlockNumber += seg.currentBlockSize / blockSize
+		seg.currentBlockSize = seg.currentBlockSize % blockSize
+	}
+
+	seg.chunkBuffer = seg.chunkBuffer[:0]
+
 	return nil
 }
 
