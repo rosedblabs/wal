@@ -1,3 +1,14 @@
+# Release 1.3.3 (2023-08-19)
+
+## 🎠 Community
+* Thanks to @LEAVING-7 
+  * Keep function name consistent in wal_test.go (https://github.com/rosedblabs/wal/pull/24)
+* Thanks to @amityahav 
+  * Improved performance for writing large records (> blockSize) (https://github.com/rosedblabs/wal/pull/21)
+## 🐞 Bug Fixes
+* fix a bug if the segment size exceeds 4GB
+* Enhancement: use bufferpool to aviod writing twice https://github.com/rosedblabs/wal/commit/1345f5013113781c59ddaca36ddb13bdcc58ce27
+
 # Release 1.3.2 (2023-08-07)
 
 ## 🎄 Enhancements
