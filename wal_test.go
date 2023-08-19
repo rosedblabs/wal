@@ -196,8 +196,8 @@ func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
 	assert.Equal(t, size, count)
 }
 
-func TestDelete(t *testing.T) {
-	dir, _ := os.MkdirTemp("", "wal-test-write1")
+func TestWAL_Delete(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-delete")
 	opts := Options{
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
