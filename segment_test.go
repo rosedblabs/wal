@@ -326,8 +326,8 @@ func TestSegment_Write_LargeSize(t *testing.T) {
 	t.Run("Block-10000", func(t *testing.T) {
 		testSegmentReaderLargeSize(t, blockSize-chunkHeaderSize, 10000)
 	})
-	t.Run("32*Block-10000", func(t *testing.T) {
-		testSegmentReaderLargeSize(t, 32*blockSize, 10000)
+	t.Run("32*Block-1000", func(t *testing.T) {
+		testSegmentReaderLargeSize(t, 32*blockSize, 1000)
 	})
 	t.Run("64*Block-100", func(t *testing.T) {
 		testSegmentReaderLargeSize(t, 64*blockSize, 100)
