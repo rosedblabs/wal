@@ -42,6 +42,7 @@ type WAL struct {
 	mu            sync.RWMutex
 	blockCache    *lru.Cache[uint64, []byte]
 	bytesWrite    uint32
+	renameIds     []SegmentID
 }
 
 // Reader represents a reader for the WAL.
@@ -382,9 +383,11 @@ func (wal *WAL) Close() error {
 		if err := segment.Close(); err != nil {
 			return err
 		}
+		wal.renameIds = append(wal.renameIds, segment.id)
 	}
 	wal.olderSegments = nil
 
+	wal.renameIds = append(wal.renameIds, wal.activeSegment.id)
 	// close the active segment file.
 	return wal.activeSegment.Close()
 }
@@ -434,13 +437,8 @@ func (wal *WAL) RenameFileExt(ext string) error {
 		return os.Rename(oldName, newName)
 	}
 
-	for _, file := range wal.olderSegments {
-		if err := renameFile(file.id); err != nil {
-			return err
-		}
-	}
-	if wal.activeSegment != nil {
-		if err := renameFile(wal.activeSegment.id); err != nil {
+	for _, id := range wal.renameIds {
+		if err := renameFile(id); err != nil {
 			return err
 		}
 	}
