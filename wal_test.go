@@ -253,3 +253,24 @@ func TestWAL_ReaderWithStart(t *testing.T) {
 	assert.Equal(t, pos3.SegmentId, uint32(3))
 	assert.Equal(t, pos3.BlockNumber, uint32(5))
 }
+
+func TestWAL_RenameFileExt(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-rename-ext")
+	opts := Options{
+		DirPath:        dir,
+		SegmentFileExt: ".VLOG.1.temp",
+		SegmentSize:    8 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyWAL(wal)
+	testWriteAndIterate(t, wal, 20000, 512)
+
+	err = wal.RenameFileExt(".VLOG.1")
+	assert.Nil(t, err)
+	for i := 0; i < 20000; i++ {
+		_, err = wal.Write([]byte(strings.Repeat("W", 512)))
+		assert.Nil(t, err)
+	}
+}

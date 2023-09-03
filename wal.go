@@ -419,6 +419,36 @@ func (wal *WAL) Sync() error {
 	return wal.activeSegment.Sync()
 }
 
+// RenameFileExt renames all segment files' extension name.
+// It is now used by the Merge operation of loutsdb, not a common usage for most users.
+func (wal *WAL) RenameFileExt(ext string) error {
+	if !strings.HasPrefix(ext, ".") {
+		return fmt.Errorf("segment file extension must start with '.'")
+	}
+	wal.mu.Lock()
+	defer wal.mu.Unlock()
+
+	renameFile := func(id SegmentID) error {
+		oldName := SegmentFileName(wal.options.DirPath, wal.options.SegmentFileExt, id)
+		newName := SegmentFileName(wal.options.DirPath, ext, id)
+		return os.Rename(oldName, newName)
+	}
+
+	for _, file := range wal.olderSegments {
+		if err := renameFile(file.id); err != nil {
+			return err
+		}
+	}
+	if wal.activeSegment != nil {
+		if err := renameFile(wal.activeSegment.id); err != nil {
+			return err
+		}
+	}
+
+	wal.options.SegmentFileExt = ext
+	return nil
+}
+
 func (wal *WAL) isFull(delta int64) bool {
 	return wal.activeSegment.Size()+delta+chunkHeaderSize > wal.options.SegmentSize
 }
