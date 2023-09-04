@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -297,6 +299,111 @@ func (r *Reader) CurrentChunkPosition() *ChunkPosition {
 		BlockNumber: reader.blockNumber,
 		ChunkOffset: reader.chunkOffset,
 	}
+}
+
+// WriteBatch
+func (wal *WAL) WriteBatch(batchData [][]byte) ([]*ChunkPosition, error) {
+	wal.mu.Lock()
+	defer wal.mu.Unlock()
+	// calculate segment groups
+	// [start,end)
+	groups := make([]struct {
+		SegId   uint32
+		StartId int
+		EndId   int
+	}, 0)
+
+	curSize := wal.activeSegment.Size()
+	startId := 0
+	curSegId := wal.activeSegment.id
+
+	for id, data := range batchData {
+		// check valid
+		if int64(len(data))+chunkHeaderSize > wal.options.SegmentSize {
+			return nil, ErrValueTooLarge
+		}
+		if int64(len(data))+curSize > wal.options.SegmentSize {
+			if startId != id {
+				groups = append(groups, struct {
+					SegId   uint32
+					StartId int
+					EndId   int
+				}{
+					curSegId, startId, id,
+				})
+				startId = id
+				curSegId += 1
+				curSize = int64(len(data))
+			}
+		} else {
+			curSize += int64(len(data))
+		}
+	}
+
+	if curSize > 0 {
+		groups = append(groups, struct {
+			SegId   uint32
+			StartId int
+			EndId   int
+		}{
+			curSegId, startId, len(batchData),
+		})
+	}
+	
+	// create segment file
+	if curSegId > wal.activeSegment.id {
+		// move active segment to olderSegments
+		wal.olderSegments[wal.activeSegment.id] = wal.activeSegment
+		// create new
+		oldId := wal.activeSegment.id
+		for i := oldId + 1; i <= curSegId; i++ {
+			segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
+				i, wal.blockCache)
+			if err != nil {
+				return nil, err
+			}
+			if i == curSegId {
+				wal.activeSegment = segment
+			} else {
+				wal.olderSegments[i] = segment
+			}
+		}
+	}
+
+	// cocurrent write segment
+	positions := make([]*ChunkPosition, len(batchData))
+	g, ctx := errgroup.WithContext(context.Background())
+	for _, group := range groups {
+		data := batchData[group.StartId:group.EndId]
+		position := positions[group.StartId:group.EndId]
+		var curSeg *segment
+		if group.SegId == wal.activeSegment.id {
+			curSeg = wal.activeSegment
+		} else {
+			curSeg = wal.olderSegments[group.SegId]
+		}
+		g.Go(func() error {
+			for idx, item := range data {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+					pos, err := curSeg.Write(item)
+					if err != nil {
+						return err
+					}
+					position[idx] = pos
+				}
+			}
+			return curSeg.Sync()
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return positions, nil
 }
 
 // Write writes the data to the WAL.

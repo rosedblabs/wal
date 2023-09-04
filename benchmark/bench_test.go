@@ -1,12 +1,13 @@
 package benchmark
 
 import (
-	"github.com/rosedblabs/wal"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/rosedblabs/wal"
+	"github.com/stretchr/testify/assert"
 )
 
 var walFile *wal.WAL
@@ -43,6 +44,28 @@ func BenchmarkWAL_Write(b *testing.B) {
 		_, err := walFile.Write([]byte("Hello World"))
 		assert.Nil(b, err)
 	}
+}
+
+func BenchmarkWAL_WriteBatch(b *testing.B) {
+	data := make([][]byte, b.N)
+	for i := 0; i < b.N; i++ {
+		data[i] = []byte(strings.Repeat("X", 10000))
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	_, err := walFile.WriteBatch(data)
+	assert.Nil(b, err)
+}
+
+func BenchmarkWAL_WriteBatch2(b *testing.B) {
+	data := make([][]byte, b.N)
+	for i := 0; i < b.N; i++ {
+		data[i] = []byte(strings.Repeat("X", 10))
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	_, err := walFile.WriteBatch(data)
+	assert.Nil(b, err)
 }
 
 func BenchmarkWAL_Read(b *testing.B) {

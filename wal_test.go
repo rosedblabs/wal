@@ -16,6 +16,25 @@ func destroyWAL(wal *WAL) {
 	}
 }
 
+func TestWAL_WriteBatch(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-write-batch-1")
+	opts := Options{
+		DirPath:        dir,
+		SegmentFileExt: ".SEG",
+		SegmentSize:    32 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyWAL(wal)
+
+	testWriteBatchIterate(t, wal, 0, 10)
+	assert.True(t, wal.IsEmpty())
+
+	testWriteBatchIterate(t, wal, 100000, 512)
+	assert.False(t, wal.IsEmpty())
+}
+
 func TestWAL_Write(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write1")
 	opts := Options{
@@ -166,6 +185,33 @@ func TestWAL_Reader(t *testing.T) {
 		_ = wal2.Close()
 	}()
 	validate(wal2, size)
+}
+
+func testWriteBatchIterate(t *testing.T, wal *WAL, size, valueSize int) {
+	data := make([][]byte, size)
+	for i := 0; i < size; i++ {
+		val := strings.Repeat("wal", valueSize)
+		data[i] = []byte(val)
+	}
+	positions, err := wal.WriteBatch(data)
+	assert.Nil(t, err)
+	assert.Equal(t, len(positions), size)
+
+	count := 0
+	reader := wal.NewReader()
+	for {
+		data, pos, err := reader.Next()
+		if err != nil {
+			break
+		}
+		assert.Equal(t, strings.Repeat("wal", valueSize), string(data))
+
+		assert.Equal(t, positions[count].SegmentId, pos.SegmentId)
+		assert.Equal(t, positions[count].BlockNumber, pos.BlockNumber)
+		assert.Equal(t, positions[count].ChunkOffset, pos.ChunkOffset)
+
+		count++
+	}
 }
 
 func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
