@@ -38,6 +38,10 @@ const (
 	blockSize = 32 * KB
 
 	fileModePerm = 0644
+
+	// uin32 + uint32 + int64 + uin32
+	// segMentId + BlockNumber + ChunkOffset + ChunkSize
+	maxLen = binary.MaxVarintLen32*3 + binary.MaxVarintLen64
 )
 
 // Segment represents a single segment file in WAL.
@@ -432,9 +436,21 @@ func (segReader *segmentReader) Next() ([]byte, *ChunkPosition, error) {
 }
 
 // Encode encodes the chunk position to a byte slice.
+// Return the slice with the actual occupied elements.
 // You can decode it by calling wal.DecodeChunkPosition().
 func (cp *ChunkPosition) Encode() []byte {
-	maxLen := binary.MaxVarintLen32*3 + binary.MaxVarintLen64
+	return cp.encode(true)
+}
+
+// EncodeFixedSize encodes the chunk position to a byte slice.
+// Return a slice of size "maxLen".
+// You can decode it by calling wal.DecodeChunkPosition().
+func (cp *ChunkPosition) EncodeFixedSize() []byte {
+	return cp.encode(false)
+}
+
+// encode encodes the chunk position to a byte slice.
+func (cp *ChunkPosition) encode(shrink bool) []byte {
 	buf := make([]byte, maxLen)
 
 	var index = 0
@@ -447,7 +463,10 @@ func (cp *ChunkPosition) Encode() []byte {
 	// ChunkSize
 	index += binary.PutUvarint(buf[index:], uint64(cp.ChunkSize))
 
-	return buf[:index]
+	if shrink {
+		return buf[:index]
+	}
+	return buf
 }
 
 // DecodeChunkPosition decodes the chunk position from a byte slice.
