@@ -349,7 +349,7 @@ func (wal *WAL) WriteBatch(batchData [][]byte) ([]*ChunkPosition, error) {
 			curSegId, startId, len(batchData),
 		})
 	}
-	
+
 	// create segment file
 	if curSegId > wal.activeSegment.id {
 		// move active segment to olderSegments
