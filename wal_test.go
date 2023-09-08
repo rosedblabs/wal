@@ -16,7 +16,7 @@ func destroyWAL(wal *WAL) {
 	}
 }
 
-func TestWAL_WriteBatch(t *testing.T) {
+func TestWAL_WriteALL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write-batch-1")
 	opts := Options{
 		DirPath:        dir,
@@ -28,10 +28,10 @@ func TestWAL_WriteBatch(t *testing.T) {
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
-	testWriteBatchIterate(t, wal, 0, 10)
+	testWriteAllIterate(t, wal, 0, 10)
 	assert.True(t, wal.IsEmpty())
 
-	testWriteBatchIterate(t, wal, 100000, 512)
+	testWriteAllIterate(t, wal, 10000, 512)
 	assert.False(t, wal.IsEmpty())
 }
 
@@ -187,13 +187,13 @@ func TestWAL_Reader(t *testing.T) {
 	validate(wal2, size)
 }
 
-func testWriteBatchIterate(t *testing.T, wal *WAL, size, valueSize int) {
-	data := make([][]byte, size)
+func testWriteAllIterate(t *testing.T, wal *WAL, size, valueSize int) {
 	for i := 0; i < size; i++ {
 		val := strings.Repeat("wal", valueSize)
-		data[i] = []byte(val)
+		err := wal.PendingWrites([]byte(val))
+		assert.Nil(t, err)
 	}
-	positions, err := wal.WriteBatch(data)
+	positions, err := wal.WriteALL()
 	assert.Nil(t, err)
 	assert.Equal(t, len(positions), size)
 
@@ -212,6 +212,7 @@ func testWriteBatchIterate(t *testing.T, wal *WAL, size, valueSize int) {
 
 		count++
 	}
+	assert.Equal(t, len(wal.pendingWrites), 0)
 }
 
 func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
@@ -301,8 +302,8 @@ func TestWAL_ReaderWithStart(t *testing.T) {
 }
 
 func TestWAL_RenameFileExt(t *testing.T) {
-	dir, _ := os.MkdirTemp("", "wal-test-rename-ext")
-	dir = "/tmp/wal-test"
+	// dir, _ := os.MkdirTemp("", "wal-test-rename-ext")
+	dir := "/tmp/wal-test"
 	opts := Options{
 		DirPath:        dir,
 		SegmentFileExt: ".VLOG.1.temp",
@@ -330,4 +331,26 @@ func TestWAL_RenameFileExt(t *testing.T) {
 		_, err = wal2.Write([]byte(strings.Repeat("W", 512)))
 		assert.Nil(t, err)
 	}
+}
+
+func TestWAL_calSizeUpperBound(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-TestWAL_calSizeUpperBound")
+	opts := Options{
+		DirPath:        dir,
+		SegmentFileExt: ".VLOG.1.temp",
+		SegmentSize:    8 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyWAL(wal)
+
+	size := wal.calSizeUpperBound(int64(0))
+	assert.Equal(t, int64(14), size)
+
+	size = wal.calSizeUpperBound(int64(32761))
+	assert.Equal(t, int64(32775), size)
+
+	size = wal.calSizeUpperBound(int64(32769))
+	assert.Equal(t, int64(32790), size)
 }

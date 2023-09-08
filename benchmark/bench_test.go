@@ -47,25 +47,19 @@ func BenchmarkWAL_Write(b *testing.B) {
 }
 
 func BenchmarkWAL_WriteBatch(b *testing.B) {
-	data := make([][]byte, b.N)
-	for i := 0; i < b.N; i++ {
-		data[i] = []byte(strings.Repeat("X", 10000))
-	}
 	b.ResetTimer()
 	b.ReportAllocs()
-	_, err := walFile.WriteBatch(data)
-	assert.Nil(b, err)
-}
-
-func BenchmarkWAL_WriteBatch2(b *testing.B) {
-	data := make([][]byte, b.N)
 	for i := 0; i < b.N; i++ {
-		data[i] = []byte(strings.Repeat("X", 10))
+		for j := 0; j < 31; j++ {
+			err := walFile.PendingWrites([]byte(strings.Repeat("X", wal.MB)))
+			assert.Nil(b, err)
+		}
+		err := walFile.PendingWrites([]byte(strings.Repeat("X", wal.MB)))
+		assert.Equal(b, wal.ErrPendingSizeTooLarge, err)
+		pos, err := walFile.WriteALL()
+		assert.Nil(b, err)
+		assert.Equal(b, 31, len(pos))
 	}
-	b.ResetTimer()
-	b.ReportAllocs()
-	_, err := walFile.WriteBatch(data)
-	assert.Nil(b, err)
 }
 
 func BenchmarkWAL_Read(b *testing.B) {

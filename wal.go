@@ -1,7 +1,6 @@
 package wal
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -20,7 +18,8 @@ const (
 )
 
 var (
-	ErrValueTooLarge = errors.New("the data size can't larger than segment size")
+	ErrValueTooLarge       = errors.New("the data size can't larger than segment size")
+	ErrPendingSizeTooLarge = errors.New("the upper bound of pendingWrites can't larger than segment size")
 )
 
 // WAL represents a Write-Ahead Log structure that provides durability
@@ -45,6 +44,8 @@ type WAL struct {
 	blockCache    *lru.Cache[uint64, []byte]
 	bytesWrite    uint32
 	renameIds     []SegmentID
+	pendingWrites [][]byte
+	pendingSize   int64
 }
 
 // Reader represents a reader for the WAL.
@@ -71,6 +72,7 @@ func Open(options Options) (*WAL, error) {
 	wal := &WAL{
 		options:       options,
 		olderSegments: make(map[SegmentID]*segment),
+		pendingWrites: make([][]byte, 0),
 	}
 
 	// create the directory if not exists.
@@ -301,108 +303,53 @@ func (r *Reader) CurrentChunkPosition() *ChunkPosition {
 	}
 }
 
-// WriteBatch
-func (wal *WAL) WriteBatch(batchData [][]byte) ([]*ChunkPosition, error) {
+// PendingWrites add data to wal.pendingWrites and wait for batch write.
+func (wal *WAL) PendingWrites(data []byte) error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
-	// calculate segment groups
-	// [start,end)
-	groups := make([]struct {
-		SegId   uint32
-		StartId int
-		EndId   int
-	}, 0)
 
-	curSize := wal.activeSegment.Size()
-	startId := 0
-	curSegId := wal.activeSegment.id
-
-	for id, data := range batchData {
-		// check valid
-		if int64(len(data))+chunkHeaderSize > wal.options.SegmentSize {
-			return nil, ErrValueTooLarge
-		}
-		if int64(len(data))+curSize > wal.options.SegmentSize {
-			if startId != id {
-				groups = append(groups, struct {
-					SegId   uint32
-					StartId int
-					EndId   int
-				}{
-					curSegId, startId, id,
-				})
-				startId = id
-				curSegId += 1
-				curSize = int64(len(data))
-			}
-		} else {
-			curSize += int64(len(data))
-		}
+	if wal.pendingSize+wal.calSizeUpperBound(int64(len(data))) > wal.options.SegmentSize {
+		return ErrPendingSizeTooLarge
 	}
+	wal.pendingSize += wal.calSizeUpperBound(int64(len(data)))
+	wal.pendingWrites = append(wal.pendingWrites, data)
+	return nil
+}
 
-	if curSize > 0 {
-		groups = append(groups, struct {
-			SegId   uint32
-			StartId int
-			EndId   int
-		}{
-			curSegId, startId, len(batchData),
-		})
+// WriteALL write wal.pendingWrites to WAL and then clear wal.pendingWrites
+func (wal *WAL) WriteALL() ([]*ChunkPosition, error) {
+	if len(wal.pendingWrites) == 0 {
+		return make([]*ChunkPosition, 0), nil
 	}
+	if wal.pendingSize > wal.options.SegmentSize {
+		return nil, ErrValueTooLarge
+	}
+	wal.mu.Lock()
+	defer func() {
+		wal.pendingWrites = wal.pendingWrites[:0]
+		wal.mu.Unlock()
+	}()
 
-	// create segment file
-	if curSegId > wal.activeSegment.id {
-		// move active segment to olderSegments
+	if wal.isFull(wal.pendingSize) {
+		if err := wal.activeSegment.Sync(); err != nil {
+			return nil, err
+		}
+		wal.bytesWrite = 0
+		segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
+			wal.activeSegment.id+1, wal.blockCache)
+		if err != nil {
+			return nil, err
+		}
 		wal.olderSegments[wal.activeSegment.id] = wal.activeSegment
-		// create new
-		oldId := wal.activeSegment.id
-		for i := oldId + 1; i <= curSegId; i++ {
-			segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
-				i, wal.blockCache)
-			if err != nil {
-				return nil, err
-			}
-			if i == curSegId {
-				wal.activeSegment = segment
-			} else {
-				wal.olderSegments[i] = segment
-			}
-		}
+		wal.activeSegment = segment
 	}
 
-	// cocurrent write segment
-	positions := make([]*ChunkPosition, len(batchData))
-	g, ctx := errgroup.WithContext(context.Background())
-	for _, group := range groups {
-		data := batchData[group.StartId:group.EndId]
-		position := positions[group.StartId:group.EndId]
-		var curSeg *segment
-		if group.SegId == wal.activeSegment.id {
-			curSeg = wal.activeSegment
-		} else {
-			curSeg = wal.olderSegments[group.SegId]
-		}
-		g.Go(func() error {
-			for idx, item := range data {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-					pos, err := curSeg.Write(item)
-					if err != nil {
-						return err
-					}
-					position[idx] = pos
-				}
-			}
-			return curSeg.Sync()
-		})
-	}
-
-	if err := g.Wait(); err != nil {
+	positions, err := wal.activeSegment.WriteAll(wal.pendingWrites)
+	if err != nil {
 		return nil, err
 	}
-
+	wal.pendingWrites = wal.pendingWrites[:0]
+	wal.pendingSize = 0
 	return positions, nil
 }
 
@@ -555,5 +502,11 @@ func (wal *WAL) RenameFileExt(ext string) error {
 }
 
 func (wal *WAL) isFull(delta int64) bool {
-	return wal.activeSegment.Size()+delta+chunkHeaderSize > wal.options.SegmentSize
+	return wal.activeSegment.Size()+wal.calSizeUpperBound(delta) > wal.options.SegmentSize
+}
+
+// calSizeUpperBound calculate the possible maximum size.
+// the maximum size = max padding + (num_block + 1) * headerSize + dataSize
+func (wal *WAL) calSizeUpperBound(size int64) int64 {
+	return chunkHeaderSize + size + (size/blockSize+1)*chunkHeaderSize
 }
