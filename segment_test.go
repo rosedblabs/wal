@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"encoding/binary"
 	"io"
 	"math"
 	"os"
@@ -376,6 +377,20 @@ func TestChunkPosition_Encode(t *testing.T) {
 	validate := func(pos *ChunkPosition) {
 		res := pos.Encode()
 		assert.NotNil(t, res)
+		decRes := DecodeChunkPosition(res)
+		assert.Equal(t, pos, decRes)
+	}
+
+	validate(&ChunkPosition{1, 2, 3, 100})
+	validate(&ChunkPosition{0, 0, 0, 0})
+	validate(&ChunkPosition{math.MaxUint32, math.MaxUint32, math.MaxInt64, math.MaxUint32})
+}
+
+func TestChunkPosition_EncodeFixedSize(t *testing.T) {
+	validate := func(pos *ChunkPosition) {
+		res := pos.EncodeFixedSize()
+		assert.NotNil(t, res)
+		assert.Equal(t, binary.MaxVarintLen32*3+binary.MaxVarintLen64, len(res))
 		decRes := DecodeChunkPosition(res)
 		assert.Equal(t, pos, decRes)
 	}
