@@ -121,10 +121,10 @@ func newBlockAndHeader() interface{} {
 	}
 }
 
-// NewReader creates a new segment reader.
+// newReader creates a new segment reader.
 // You can call Next to get the next chunk data,
 // and io.EOF will be returned when there is no data.
-func (seg *segment) NewReader() *segmentReader {
+func (seg *segment) newReader() *segmentReader {
 	return &segmentReader{
 		segment:     seg,
 		blockNumber: 0,
@@ -132,16 +132,16 @@ func (seg *segment) NewReader() *segmentReader {
 	}
 }
 
-// Sync flushes the segment file to disk.
-func (seg *segment) Sync() error {
+// sync flushes the segment file to disk.
+func (seg *segment) sync() error {
 	if seg.closed {
 		return nil
 	}
 	return seg.fd.Sync()
 }
 
-// Remove removes the segment file.
-func (seg *segment) Remove() error {
+// remove removes the segment file.
+func (seg *segment) remove() error {
 	if !seg.closed {
 		seg.closed = true
 		_ = seg.fd.Close()
@@ -150,8 +150,8 @@ func (seg *segment) Remove() error {
 	return os.Remove(seg.fd.Name())
 }
 
-// Close closes the segment file.
-func (seg *segment) Close() error {
+// close closes the segment file.
+func (seg *segment) close() error {
 	if seg.closed {
 		return nil
 	}
@@ -160,8 +160,8 @@ func (seg *segment) Close() error {
 	return seg.fd.Close()
 }
 
-// Size returns the size of the segment file.
-func (seg *segment) Size() int64 {
+// size returns the size of the segment file.
+func (seg *segment) size() int64 {
 	size := int64(seg.currentBlockNumber) * int64(blockSize)
 	return size + int64(seg.currentBlockSize)
 }
@@ -230,8 +230,8 @@ func (seg *segment) calChunkPosition(data []byte, buf *bytebufferpool.ByteBuffer
 	return position, padding, nil
 }
 
-// WriteAll write batch data to the segment file.
-func (seg *segment) WriteAll(data [][]byte) ([]*ChunkPosition, error) {
+// writeAll write batch data to the segment file.
+func (seg *segment) writeAll(data [][]byte) ([]*ChunkPosition, error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}
@@ -267,13 +267,13 @@ func (seg *segment) WriteAll(data [][]byte) ([]*ChunkPosition, error) {
 	return positions, nil
 }
 
-// Write writes the data to the segment file.
+// write writes the data to the segment file.
 // The data will be written in chunks, and the chunk has four types:
 // ChunkTypeFull, ChunkTypeFirst, ChunkTypeMiddle, ChunkTypeLast.
 //
 // Each chunk has a header, and the header contains the length, type and checksum.
 // And the payload of the chunk is the real data you want to write.
-func (seg *segment) Write(data []byte) (*ChunkPosition, error) {
+func (seg *segment) write(data []byte) (*ChunkPosition, error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}
@@ -334,8 +334,8 @@ func (seg *segment) writeChunkBuffer(buf *bytebufferpool.ByteBuffer) error {
 	return nil
 }
 
-// Read reads the data from the segment file by the block number and chunk offset.
-func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
+// read reads the data from the segment file by the block number and chunk offset.
+func (seg *segment) read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
 	value, _, err := seg.readInternal(blockNumber, chunkOffset)
 	return value, err
 }
@@ -348,7 +348,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 	var (
 		result    []byte
 		bh        = seg.blockPool.Get().(*blockAndHeader)
-		segSize   = seg.Size()
+		segSize   = seg.size()
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
 	)
 	defer func() {
@@ -433,9 +433,9 @@ func (seg *segment) getCacheKey(blockNumber uint32) uint64 {
 	return uint64(seg.id)<<32 | uint64(blockNumber)
 }
 
-// Next returns the next chunk data.
+// next returns the next chunk data.
 // You can call it repeatedly until io.EOF is returned.
-func (segReader *segmentReader) Next() ([]byte, *ChunkPosition, error) {
+func (segReader *segmentReader) next() ([]byte, *ChunkPosition, error) {
 	// The segment file is closed
 	if segReader.segment.closed {
 		return nil, nil, ErrClosed
