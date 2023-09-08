@@ -325,10 +325,7 @@ func (wal *WAL) WriteALL() ([]*ChunkPosition, error) {
 		return nil, ErrValueTooLarge
 	}
 	wal.mu.Lock()
-	defer func() {
-		wal.pendingWrites = wal.pendingWrites[:0]
-		wal.mu.Unlock()
-	}()
+	defer wal.mu.Unlock()
 
 	if wal.isFull(wal.pendingSize) {
 		if err := wal.activeSegment.Sync(); err != nil {
