@@ -176,8 +176,7 @@ func (wal *WAL) ActiveSegmentID() SegmentID {
 }
 
 // IsEmpty returns whether the WAL is empty.
-// Only there is only one active segment file and it is empty,
-// the WAL is empty.
+// Only there is only one empty active segment file, which means the WAL is empty.
 func (wal *WAL) IsEmpty() bool {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
