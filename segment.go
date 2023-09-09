@@ -166,8 +166,8 @@ func (seg *segment) size() int64 {
 	return size + int64(seg.currentBlockSize)
 }
 
-// calChunkPosition calculate chunkPosition for data, write data to bytebufferpool
-func (seg *segment) calChunkPosition(data []byte, buf *bytebufferpool.ByteBuffer, currentBlockNumber uint32, currentBlockSize uint32) (*ChunkPosition, uint32, error) {
+// writeToBuf calculate chunkPosition for data, write data to bytebufferpool
+func (seg *segment) writeToBuf(data []byte, buf *bytebufferpool.ByteBuffer, currentBlockNumber uint32, currentBlockSize uint32) (*ChunkPosition, uint32, error) {
 	padding := uint32(0)
 	if currentBlockSize+chunkHeaderSize >= blockSize {
 		buf.Write(make([]byte, blockSize-currentBlockSize))
@@ -247,7 +247,7 @@ func (seg *segment) writeAll(data [][]byte) ([]*ChunkPosition, error) {
 	currentBlockNumber := seg.currentBlockNumber
 	currentBlockSize := seg.currentBlockSize
 	for i := 0; i < len(positions); i++ {
-		pos, padding, err := seg.calChunkPosition(data[i], chunkBuffer, currentBlockNumber, currentBlockSize)
+		pos, padding, err := seg.writeInternal(data[i], chunkBuffer, currentBlockNumber, currentBlockSize, false)
 		if err != nil {
 			return nil, err
 		}
@@ -255,9 +255,6 @@ func (seg *segment) writeAll(data [][]byte) ([]*ChunkPosition, error) {
 		if currentBlockSize >= blockSize {
 			currentBlockNumber += currentBlockSize / blockSize
 			currentBlockSize = currentBlockSize % blockSize
-		}
-		if err != nil {
-			return nil, err
 		}
 		positions[i] = pos
 	}
@@ -284,17 +281,27 @@ func (seg *segment) write(data []byte) (*ChunkPosition, error) {
 		bytebufferpool.Put(chunkBuffer)
 	}()
 
-	position, _, err := seg.calChunkPosition(data, chunkBuffer, seg.currentBlockNumber, seg.currentBlockSize)
-
+	pos, _, err := seg.writeInternal(data, chunkBuffer, seg.currentBlockNumber, seg.currentBlockSize, true)
 	if err != nil {
 		return nil, err
 	}
+	return pos, nil
+}
 
-	if err := seg.writeChunkBuffer(chunkBuffer); err != nil {
-		return nil, err
+func (seg *segment) writeInternal(data []byte, buf *bytebufferpool.ByteBuffer, blockNumber uint32, blockSize uint32, isWriteBuf bool) (*ChunkPosition, uint32, error) {
+	position, padding, err := seg.writeToBuf(data, buf, blockNumber, blockSize)
+
+	if err != nil {
+		return nil, padding, err
 	}
 
-	return position, nil
+	if isWriteBuf {
+		if err := seg.writeChunkBuffer(buf); err != nil {
+			return nil, padding, err
+		}
+	}
+
+	return position, padding, nil
 }
 
 func (seg *segment) appendChunkBuffer(buf *bytebufferpool.ByteBuffer, data []byte, chunkType ChunkType) {
@@ -415,7 +422,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		if chunkType == ChunkTypeFull || chunkType == ChunkTypeLast {
 			nextChunk.BlockNumber = blockNumber
 			nextChunk.ChunkOffset = checksumEnd
-			// If this is the last chunk in the block, and the left block
+			// If this is the last chunk interhe block, and the left block
 			// space are paddings, the next chunk should be in the next block.
 			if checksumEnd+chunkHeaderSize >= blockSize {
 				nextChunk.BlockNumber += 1
