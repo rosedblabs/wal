@@ -121,10 +121,10 @@ func newBlockAndHeader() interface{} {
 	}
 }
 
-// newReader creates a new segment reader.
+// NewReader creates a new segment reader.
 // You can call Next to get the next chunk data,
 // and io.EOF will be returned when there is no data.
-func (seg *segment) newReader() *segmentReader {
+func (seg *segment) NewReader() *segmentReader {
 	return &segmentReader{
 		segment:     seg,
 		blockNumber: 0,
@@ -132,16 +132,16 @@ func (seg *segment) newReader() *segmentReader {
 	}
 }
 
-// sync flushes the segment file to disk.
-func (seg *segment) sync() error {
+// Sync flushes the segment file to disk.
+func (seg *segment) Sync() error {
 	if seg.closed {
 		return nil
 	}
 	return seg.fd.Sync()
 }
 
-// remove removes the segment file.
-func (seg *segment) remove() error {
+// Remove removes the segment file.
+func (seg *segment) Remove() error {
 	if !seg.closed {
 		seg.closed = true
 		_ = seg.fd.Close()
@@ -150,8 +150,8 @@ func (seg *segment) remove() error {
 	return os.Remove(seg.fd.Name())
 }
 
-// close closes the segment file.
-func (seg *segment) close() error {
+// Close closes the segment file.
+func (seg *segment) Close() error {
 	if seg.closed {
 		return nil
 	}
@@ -160,8 +160,8 @@ func (seg *segment) close() error {
 	return seg.fd.Close()
 }
 
-// size returns the size of the segment file.
-func (seg *segment) size() int64 {
+// Size returns the Size of the segment file.
+func (seg *segment) Size() int64 {
 	size := int64(seg.currentBlockNumber) * int64(blockSize)
 	return size + int64(seg.currentBlockSize)
 }
@@ -234,8 +234,8 @@ func (seg *segment) writeToBuf(data []byte, buf *bytebufferpool.ByteBuffer) (*Ch
 	return position, nil
 }
 
-// writeAll write batch data to the segment file.
-func (seg *segment) writeAll(data [][]byte) (positions []*ChunkPosition, err error) {
+// WriteALL write batch data to the segment file.
+func (seg *segment) WriteALL(data [][]byte) (positions []*ChunkPosition, err error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}
@@ -266,13 +266,13 @@ func (seg *segment) writeAll(data [][]byte) (positions []*ChunkPosition, err err
 	return
 }
 
-// write writes the data to the segment file.
+// Write writes the data to the segment file.
 // The data will be written in chunks, and the chunk has four types:
 // ChunkTypeFull, ChunkTypeFirst, ChunkTypeMiddle, ChunkTypeLast.
 //
 // Each chunk has a header, and the header contains the length, type and checksum.
-// And the payload of the chunk is the real data you want to write.
-func (seg *segment) write(data []byte) (pos *ChunkPosition, err error) {
+// And the payload of the chunk is the real data you want to Write.
+func (seg *segment) Write(data []byte) (pos *ChunkPosition, err error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}
@@ -329,8 +329,8 @@ func (seg *segment) writeChunkBuffer(buf *bytebufferpool.ByteBuffer) error {
 	return nil
 }
 
-// read reads the data from the segment file by the block number and chunk offset.
-func (seg *segment) read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
+// Read reads the data from the segment file by the block number and chunk offset.
+func (seg *segment) Read(blockNumber uint32, chunkOffset int64) ([]byte, error) {
 	value, _, err := seg.readInternal(blockNumber, chunkOffset)
 	return value, err
 }
@@ -343,7 +343,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 	var (
 		result    []byte
 		bh        = seg.blockPool.Get().(*blockAndHeader)
-		segSize   = seg.size()
+		segSize   = seg.Size()
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
 	)
 	defer func() {
@@ -428,9 +428,9 @@ func (seg *segment) getCacheKey(blockNumber uint32) uint64 {
 	return uint64(seg.id)<<32 | uint64(blockNumber)
 }
 
-// next returns the next chunk data.
+// Next returns the Next chunk data.
 // You can call it repeatedly until io.EOF is returned.
-func (segReader *segmentReader) next() ([]byte, *ChunkPosition, error) {
+func (segReader *segmentReader) Next() ([]byte, *ChunkPosition, error) {
 	// The segment file is closed
 	if segReader.segment.closed {
 		return nil, nil, ErrClosed

@@ -157,7 +157,7 @@ func (wal *WAL) OpenNewActiveSegment() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
 	// sync the active segment file.
-	if err := wal.activeSegment.sync(); err != nil {
+	if err := wal.activeSegment.Sync(); err != nil {
 		return err
 	}
 	// create a new segment file and set it as the active one.
@@ -186,7 +186,7 @@ func (wal *WAL) IsEmpty() bool {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
 
-	return len(wal.olderSegments) == 0 && wal.activeSegment.size() == 0
+	return len(wal.olderSegments) == 0 && wal.activeSegment.Size() == 0
 }
 
 // NewReaderWithMax returns a new reader for the WAL,
@@ -202,12 +202,12 @@ func (wal *WAL) NewReaderWithMax(segId SegmentID) *Reader {
 	var segmentReaders []*segmentReader
 	for _, segment := range wal.olderSegments {
 		if segId == 0 || segment.id <= segId {
-			reader := segment.newReader()
+			reader := segment.NewReader()
 			segmentReaders = append(segmentReaders, reader)
 		}
 	}
 	if segId == 0 || wal.activeSegment.id <= segId {
-		reader := wal.activeSegment.newReader()
+		reader := wal.activeSegment.NewReader()
 		segmentReaders = append(segmentReaders, reader)
 	}
 
@@ -271,7 +271,7 @@ func (r *Reader) Next() ([]byte, *ChunkPosition, error) {
 		return nil, nil, io.EOF
 	}
 
-	data, position, err := r.segmentReaders[r.currentReader].next()
+	data, position, err := r.segmentReaders[r.currentReader].Next()
 	if err == io.EOF {
 		r.currentReader++
 		return r.Next()
@@ -328,7 +328,7 @@ func (wal *WAL) WriteALL() ([]*ChunkPosition, error) {
 	defer wal.mu.Unlock()
 
 	if wal.isFull(wal.pendingSize) {
-		if err := wal.activeSegment.sync(); err != nil {
+		if err := wal.activeSegment.Sync(); err != nil {
 			return nil, err
 		}
 		wal.bytesWrite = 0
@@ -341,7 +341,7 @@ func (wal *WAL) WriteALL() ([]*ChunkPosition, error) {
 		wal.activeSegment = segment
 	}
 
-	positions, err := wal.activeSegment.writeAll(wal.pendingWrites)
+	positions, err := wal.activeSegment.WriteALL(wal.pendingWrites)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +361,7 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	}
 	// if the active segment file is full, sync it and create a new one.
 	if wal.isFull(int64(len(data))) {
-		if err := wal.activeSegment.sync(); err != nil {
+		if err := wal.activeSegment.Sync(); err != nil {
 			return nil, err
 		}
 		wal.bytesWrite = 0
@@ -375,7 +375,7 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	}
 
 	// write the data to the active segment file.
-	position, err := wal.activeSegment.write(data)
+	position, err := wal.activeSegment.Write(data)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +389,7 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 		needSync = wal.bytesWrite >= wal.options.BytesPerSync
 	}
 	if needSync {
-		if err := wal.activeSegment.sync(); err != nil {
+		if err := wal.activeSegment.Sync(); err != nil {
 			return nil, err
 		}
 		wal.bytesWrite = 0
@@ -416,7 +416,7 @@ func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 	}
 
 	// read the data from the segment file.
-	return segment.read(pos.BlockNumber, pos.ChunkOffset)
+	return segment.Read(pos.BlockNumber, pos.ChunkOffset)
 }
 
 // Close closes the WAL.
@@ -431,7 +431,7 @@ func (wal *WAL) Close() error {
 
 	// close all segment files.
 	for _, segment := range wal.olderSegments {
-		if err := segment.close(); err != nil {
+		if err := segment.Close(); err != nil {
 			return err
 		}
 		wal.renameIds = append(wal.renameIds, segment.id)
@@ -440,7 +440,7 @@ func (wal *WAL) Close() error {
 
 	wal.renameIds = append(wal.renameIds, wal.activeSegment.id)
 	// close the active segment file.
-	return wal.activeSegment.close()
+	return wal.activeSegment.Close()
 }
 
 // Delete deletes all segment files of the WAL.
@@ -455,14 +455,14 @@ func (wal *WAL) Delete() error {
 
 	// delete all segment files.
 	for _, segment := range wal.olderSegments {
-		if err := segment.remove(); err != nil {
+		if err := segment.Remove(); err != nil {
 			return err
 		}
 	}
 	wal.olderSegments = nil
 
 	// delete the active segment file.
-	return wal.activeSegment.remove()
+	return wal.activeSegment.Remove()
 }
 
 // Sync syncs the active segment file to stable storage like disk.
@@ -470,7 +470,7 @@ func (wal *WAL) Sync() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
 
-	return wal.activeSegment.sync()
+	return wal.activeSegment.Sync()
 }
 
 // RenameFileExt renames all segment files' extension name.
@@ -499,7 +499,7 @@ func (wal *WAL) RenameFileExt(ext string) error {
 }
 
 func (wal *WAL) isFull(delta int64) bool {
-	return wal.activeSegment.size()+wal.calSizeUpperBound(delta) > wal.options.SegmentSize
+	return wal.activeSegment.Size()+wal.calSizeUpperBound(delta) > wal.options.SegmentSize
 }
 
 // calSizeUpperBound calculate the possible maximum size.
