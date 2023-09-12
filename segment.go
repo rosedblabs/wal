@@ -160,7 +160,7 @@ func (seg *segment) Close() error {
 	return seg.fd.Close()
 }
 
-// Size returns the Size of the segment file.
+// Size returns the size of the segment file.
 func (seg *segment) Size() int64 {
 	size := int64(seg.currentBlockNumber) * int64(blockSize)
 	return size + int64(seg.currentBlockSize)
