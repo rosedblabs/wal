@@ -166,12 +166,29 @@ func (seg *segment) Size() int64 {
 	return size + int64(seg.currentBlockSize)
 }
 
-// writeToBuf calculate chunkPosition for data, write data to bytebufferpool, update segment status
-func (seg *segment) writeToBuf(data []byte, buf *bytebufferpool.ByteBuffer) (*ChunkPosition, error) {
+// writeToBuffer calculate chunkPosition for data, write data to bytebufferpool, update segment status
+// The data will be written in chunks, and the chunk has four types:
+// ChunkTypeFull, ChunkTypeFirst, ChunkTypeMiddle, ChunkTypeLast.
+//
+// Each chunk has a header, and the header contains the length, type and checksum.
+// And the payload of the chunk is the real data you want to Write.
+func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteBuffer) (*ChunkPosition, error) {
+	startLen := chunkBuffer.Len()
+	padding := uint32(0)
+
+	if seg.closed {
+		return nil, ErrClosed
+	}
+
 	if seg.currentBlockSize+chunkHeaderSize >= blockSize {
-		buf.Write(make([]byte, blockSize-seg.currentBlockSize))
-		seg.currentBlockNumber += 1
-		seg.currentBlockSize = 0
+		// padding if necessary
+		if seg.currentBlockSize < blockSize {
+			chunkBuffer.Write(make([]byte, blockSize-seg.currentBlockSize))
+			padding += blockSize - seg.currentBlockSize
+			seg.currentBlockNumber += 1
+			seg.currentBlockSize = 0
+		}
+
 	}
 	position := &ChunkPosition{
 		SegmentId:   seg.id,
@@ -182,7 +199,7 @@ func (seg *segment) writeToBuf(data []byte, buf *bytebufferpool.ByteBuffer) (*Ch
 	dataSize := uint32(len(data))
 	// The entire chunk can fit into the block.
 	if seg.currentBlockSize+dataSize+chunkHeaderSize <= blockSize {
-		seg.appendChunkBuffer(buf, data, ChunkTypeFull)
+		seg.appendChunkBuffer(chunkBuffer, data, ChunkTypeFull)
 		position.ChunkSize = dataSize + chunkHeaderSize
 	} else {
 		// If the size of the data exceeds the size of the block,
@@ -214,7 +231,7 @@ func (seg *segment) writeToBuf(data []byte, buf *bytebufferpool.ByteBuffer) (*Ch
 			default: // Middle chunk
 				chunkType = ChunkTypeMiddle
 			}
-			seg.appendChunkBuffer(buf, data[dataSize-leftSize:end], chunkType)
+			seg.appendChunkBuffer(chunkBuffer, data[dataSize-leftSize:end], chunkType)
 
 			leftSize -= chunkSize
 			blockCount += 1
@@ -222,6 +239,10 @@ func (seg *segment) writeToBuf(data []byte, buf *bytebufferpool.ByteBuffer) (*Ch
 		}
 
 		position.ChunkSize = blockCount*chunkHeaderSize + dataSize
+	}
+	endLen := chunkBuffer.Len()
+	if position.ChunkSize+padding != uint32(endLen-startLen) {
+		panic(fmt.Sprintf("chunk size %d, len %d", position.ChunkSize, endLen-startLen-int(padding)))
 	}
 
 	// update segment status
@@ -234,15 +255,18 @@ func (seg *segment) writeToBuf(data []byte, buf *bytebufferpool.ByteBuffer) (*Ch
 	return position, nil
 }
 
-// WriteALL write batch data to the segment file.
-func (seg *segment) WriteALL(data [][]byte) (positions []*ChunkPosition, err error) {
+// writeAll write batch data to the segment file.
+func (seg *segment) writeAll(data [][]byte) (positions []*ChunkPosition, err error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}
+
 	originBlockNumber := seg.currentBlockNumber
 	originBlockSize := seg.currentBlockSize
+
 	// init chunk buffer
 	chunkBuffer := bytebufferpool.Get()
+	chunkBuffer.Reset()
 	defer func() {
 		if err != nil {
 			seg.currentBlockNumber = originBlockNumber
@@ -251,14 +275,15 @@ func (seg *segment) WriteALL(data [][]byte) (positions []*ChunkPosition, err err
 		chunkBuffer.Reset()
 		bytebufferpool.Put(chunkBuffer)
 	}()
-	var position *ChunkPosition
+
+	var pos *ChunkPosition
 	positions = make([]*ChunkPosition, len(data))
 	for i := 0; i < len(positions); i++ {
-		position, err = seg.writeToBuf(data[i], chunkBuffer)
+		pos, err = seg.writeToBuffer(data[i], chunkBuffer)
 		if err != nil {
 			return
 		}
-		positions[i] = position
+		positions[i] = pos
 	}
 	if err = seg.writeChunkBuffer(chunkBuffer); err != nil {
 		return
@@ -267,19 +292,17 @@ func (seg *segment) WriteALL(data [][]byte) (positions []*ChunkPosition, err err
 }
 
 // Write writes the data to the segment file.
-// The data will be written in chunks, and the chunk has four types:
-// ChunkTypeFull, ChunkTypeFirst, ChunkTypeMiddle, ChunkTypeLast.
-//
-// Each chunk has a header, and the header contains the length, type and checksum.
-// And the payload of the chunk is the real data you want to Write.
 func (seg *segment) Write(data []byte) (pos *ChunkPosition, err error) {
 	if seg.closed {
 		return nil, ErrClosed
 	}
+
 	originBlockNumber := seg.currentBlockNumber
 	originBlockSize := seg.currentBlockSize
+
 	// init chunk buffer
 	chunkBuffer := bytebufferpool.Get()
+	chunkBuffer.Reset()
 	defer func() {
 		if err != nil {
 			seg.currentBlockNumber = originBlockNumber
@@ -289,7 +312,7 @@ func (seg *segment) Write(data []byte) (pos *ChunkPosition, err error) {
 		bytebufferpool.Put(chunkBuffer)
 	}()
 
-	pos, err = seg.writeToBuf(data, chunkBuffer)
+	pos, err = seg.writeToBuffer(data, chunkBuffer)
 	if err != nil {
 		return
 	}

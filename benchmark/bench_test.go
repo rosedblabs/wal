@@ -56,9 +56,9 @@ func BenchmarkWAL_WriteBatch(b *testing.B) {
 		}
 		err := walFile.PendingWrites([]byte(strings.Repeat("X", wal.MB)))
 		assert.Equal(b, wal.ErrPendingSizeTooLarge, err)
-		pos, err := walFile.WriteALL()
+		pos, err := walFile.WriteAll()
 		assert.Nil(b, err)
-		assert.Equal(b, 31, len(pos))
+		assert.Equal(b, 0, len(pos))
 	}
 }
 

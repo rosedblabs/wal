@@ -193,7 +193,7 @@ func testWriteAllIterate(t *testing.T, wal *WAL, size, valueSize int) {
 		err := wal.PendingWrites([]byte(val))
 		assert.Nil(t, err)
 	}
-	positions, err := wal.WriteALL()
+	positions, err := wal.WriteAll()
 	assert.Nil(t, err)
 	assert.Equal(t, len(positions), size)
 
@@ -344,12 +344,12 @@ func TestWAL_calSizeUpperBound(t *testing.T) {
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
-	size := wal.calSizeUpperBound(int64(0))
+	size := wal.maxDataWriteSize(int64(0))
 	assert.Equal(t, int64(14), size)
 
-	size = wal.calSizeUpperBound(int64(32761))
+	size = wal.maxDataWriteSize(int64(32761))
 	assert.Equal(t, int64(32775), size)
 
-	size = wal.calSizeUpperBound(int64(32769))
+	size = wal.maxDataWriteSize(int64(32769))
 	assert.Equal(t, int64(32790), size)
 }
