@@ -256,7 +256,6 @@ func TestWAL_ReaderWithStart(t *testing.T) {
 
 func TestWAL_RenameFileExt(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-rename-ext")
-	dir = "/tmp/wal-test"
 	opts := Options{
 		DirPath:        dir,
 		SegmentFileExt: ".VLOG.1.temp",
@@ -265,7 +264,7 @@ func TestWAL_RenameFileExt(t *testing.T) {
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
-	//defer destroyWAL(wal)
+	defer destroyWAL(wal)
 	testWriteAndIterate(t, wal, 20000, 512)
 
 	err = wal.Close()
