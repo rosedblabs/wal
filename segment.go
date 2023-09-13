@@ -40,7 +40,7 @@ const (
 	fileModePerm = 0644
 
 	// uin32 + uint32 + int64 + uin32
-	// segMentId + BlockNumber + ChunkOffset + ChunkSize
+	// segmentId + BlockNumber + ChunkOffset + ChunkSize
 	maxLen = binary.MaxVarintLen32*3 + binary.MaxVarintLen64
 )
 
@@ -479,7 +479,7 @@ func (cp *ChunkPosition) EncodeFixedSize() []byte {
 	return cp.encode(false)
 }
 
-// encode encodes the chunk position to a byte slice.
+// encode the chunk position to a byte slice.
 func (cp *ChunkPosition) encode(shrink bool) []byte {
 	buf := make([]byte, maxLen)
 
