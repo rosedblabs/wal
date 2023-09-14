@@ -1,13 +1,15 @@
 # wal
 Write Ahead Log for LSM or bitcask storage, with block cache.
 
-## Features
+## Key Features
 * Disk based, support large data volume
 * Append only write, high performance
-* Block cache, reduce disk IO
-* Support read by position
-* Support iterate all data
-* Support batch write
+* Fast read, one disk seek to retrieve any data
+* Support Block Cache, improve read performance
+* Support batch write, all data in a batch will be written in a single disk seek
+* Iterate all data in wal with NewReader
+* Support concurrent write and read, all functions are thread safe
+* Support data compression, use Snappy and ZSTD(Coming soon)
 
 ## Design Overview
 
