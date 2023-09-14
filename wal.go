@@ -18,7 +18,8 @@ const (
 )
 
 var (
-	ErrValueTooLarge = errors.New("the data size can't larger than segment size")
+	ErrValueTooLarge       = errors.New("the data size can't larger than segment size")
+	ErrPendingSizeTooLarge = errors.New("the upper bound of pendingWrites can't larger than segment size")
 )
 
 // WAL represents a Write-Ahead Log structure that provides durability
@@ -36,13 +37,16 @@ var (
 // improving read performance by reducing disk I/O.
 // It is implemented using a lru.Cache structure with keys of type uint64 and values of type []byte.
 type WAL struct {
-	activeSegment *segment               // active segment file, used for new incoming writes.
-	olderSegments map[SegmentID]*segment // older segment files, only used for read.
-	options       Options
-	mu            sync.RWMutex
-	blockCache    *lru.Cache[uint64, []byte]
-	bytesWrite    uint32
-	renameIds     []SegmentID
+	activeSegment     *segment               // active segment file, used for new incoming writes.
+	olderSegments     map[SegmentID]*segment // older segment files, only used for read.
+	options           Options
+	mu                sync.RWMutex
+	blockCache        *lru.Cache[uint64, []byte]
+	bytesWrite        uint32
+	renameIds         []SegmentID
+	pendingWrites     [][]byte
+	pendingSize       int64
+	pendingWritesLock sync.Mutex
 }
 
 // Reader represents a reader for the WAL.
@@ -69,6 +73,7 @@ func Open(options Options) (*WAL, error) {
 	wal := &WAL{
 		options:       options,
 		olderSegments: make(map[SegmentID]*segment),
+		pendingWrites: make([][]byte, 0),
 	}
 
 	// create the directory if not exists.
@@ -298,6 +303,75 @@ func (r *Reader) CurrentChunkPosition() *ChunkPosition {
 	}
 }
 
+// ClearPendingWrites clear pendingWrite and reset pendingSize
+func (wal *WAL) ClearPendingWrites() {
+	wal.pendingSize = 0
+	wal.pendingWrites = wal.pendingWrites[:0]
+}
+
+// PendingWrites add data to wal.pendingWrites and wait for batch write.
+// If the data in pendingWrites exceeds the size of one segment, it will return a 'ErrPendingSizeTooLarge' error and clear the pendingWrites
+func (wal *WAL) PendingWrites(data []byte) error {
+	wal.pendingWritesLock.Lock()
+	defer wal.pendingWritesLock.Unlock()
+
+	size := wal.maxDataWriteSize(int64(len(data)))
+	if size+wal.pendingSize > wal.options.SegmentSize {
+		wal.ClearPendingWrites()
+		return ErrPendingSizeTooLarge
+	}
+
+	wal.pendingSize += size
+	wal.pendingWrites = append(wal.pendingWrites, data)
+	return nil
+}
+
+// flushActiveSegment create a new segment file and replace the activeSegment.
+func (wal *WAL) flushActiveSegment() error {
+	if err := wal.activeSegment.Sync(); err != nil {
+		return err
+	}
+	wal.bytesWrite = 0
+	segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
+		wal.activeSegment.id+1, wal.blockCache)
+	if err != nil {
+		return err
+	}
+	wal.olderSegments[wal.activeSegment.id] = wal.activeSegment
+	wal.activeSegment = segment
+	return nil
+}
+
+// WriteAll write wal.pendingWrites to WAL and then clear pendingWrites
+func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
+	if len(wal.pendingWrites) == 0 {
+		return make([]*ChunkPosition, 0), nil
+	}
+
+	wal.mu.Lock()
+	defer func() {
+		wal.ClearPendingWrites()
+		wal.mu.Unlock()
+	}()
+
+	if wal.activeSegment.Size()+wal.pendingSize > wal.options.SegmentSize {
+		if err := wal.flushActiveSegment(); err != nil {
+			return nil, err
+		}
+	}
+
+	positions, err := wal.activeSegment.writeAll(wal.pendingWrites)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := wal.activeSegment.Sync(); err != nil {
+		return nil, err
+	}
+
+	return positions, nil
+}
+
 // Write writes the data to the WAL.
 // Actually, it writes the data to the active segment file.
 // It returns the position of the data in the WAL, and an error if any.
@@ -309,17 +383,9 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	}
 	// if the active segment file is full, sync it and create a new one.
 	if wal.isFull(int64(len(data))) {
-		if err := wal.activeSegment.Sync(); err != nil {
+		if err := wal.flushActiveSegment(); err != nil {
 			return nil, err
 		}
-		wal.bytesWrite = 0
-		segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
-			wal.activeSegment.id+1, wal.blockCache)
-		if err != nil {
-			return nil, err
-		}
-		wal.olderSegments[wal.activeSegment.id] = wal.activeSegment
-		wal.activeSegment = segment
 	}
 
 	// write the data to the active segment file.
@@ -447,5 +513,11 @@ func (wal *WAL) RenameFileExt(ext string) error {
 }
 
 func (wal *WAL) isFull(delta int64) bool {
-	return wal.activeSegment.Size()+delta+chunkHeaderSize > wal.options.SegmentSize
+	return wal.activeSegment.Size()+wal.maxDataWriteSize(delta) > wal.options.SegmentSize
+}
+
+// maxDataWriteSize calculate the possible maximum size.
+// the maximum size = max padding + (num_block + 1) * headerSize + dataSize
+func (wal *WAL) maxDataWriteSize(size int64) int64 {
+	return chunkHeaderSize + size + (size/blockSize+1)*chunkHeaderSize
 }

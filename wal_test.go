@@ -16,6 +16,25 @@ func destroyWAL(wal *WAL) {
 	}
 }
 
+func TestWAL_WriteALL(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-write-batch-1")
+	opts := Options{
+		DirPath:        dir,
+		SegmentFileExt: ".SEG",
+		SegmentSize:    32 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyWAL(wal)
+
+	testWriteAllIterate(t, wal, 0, 10)
+	assert.True(t, wal.IsEmpty())
+
+	testWriteAllIterate(t, wal, 10000, 512)
+	assert.False(t, wal.IsEmpty())
+}
+
 func TestWAL_Write(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write1")
 	opts := Options{
@@ -168,6 +187,34 @@ func TestWAL_Reader(t *testing.T) {
 	validate(wal2, size)
 }
 
+func testWriteAllIterate(t *testing.T, wal *WAL, size, valueSize int) {
+	for i := 0; i < size; i++ {
+		val := strings.Repeat("wal", valueSize)
+		err := wal.PendingWrites([]byte(val))
+		assert.Nil(t, err)
+	}
+	positions, err := wal.WriteAll()
+	assert.Nil(t, err)
+	assert.Equal(t, len(positions), size)
+
+	count := 0
+	reader := wal.NewReader()
+	for {
+		data, pos, err := reader.Next()
+		if err != nil {
+			break
+		}
+		assert.Equal(t, strings.Repeat("wal", valueSize), string(data))
+
+		assert.Equal(t, positions[count].SegmentId, pos.SegmentId)
+		assert.Equal(t, positions[count].BlockNumber, pos.BlockNumber)
+		assert.Equal(t, positions[count].ChunkOffset, pos.ChunkOffset)
+
+		count++
+	}
+	assert.Equal(t, len(wal.pendingWrites), 0)
+}
+
 func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
 	val := strings.Repeat("wal", valueSize)
 	positions := make([]*ChunkPosition, size)
@@ -283,4 +330,26 @@ func TestWAL_RenameFileExt(t *testing.T) {
 		_, err = wal2.Write([]byte(strings.Repeat("W", 512)))
 		assert.Nil(t, err)
 	}
+}
+
+func TestWAL_calSizeUpperBound(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "wal-test-TestWAL_calSizeUpperBound")
+	opts := Options{
+		DirPath:        dir,
+		SegmentFileExt: ".VLOG.1.temp",
+		SegmentSize:    8 * 1024 * 1024,
+		BlockCache:     32 * KB * 10,
+	}
+	wal, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyWAL(wal)
+
+	size := wal.maxDataWriteSize(int64(0))
+	assert.Equal(t, int64(14), size)
+
+	size = wal.maxDataWriteSize(int64(32761))
+	assert.Equal(t, int64(32775), size)
+
+	size = wal.maxDataWriteSize(int64(32769))
+	assert.Equal(t, int64(32790), size)
 }
