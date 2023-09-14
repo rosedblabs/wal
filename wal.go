@@ -310,7 +310,8 @@ func (wal *WAL) ClearPendingWrites() {
 }
 
 // PendingWrites add data to wal.pendingWrites and wait for batch write.
-// If the data in pendingWrites exceeds the size of one segment, it will return a 'ErrPendingSizeTooLarge' error and clear the pendingWrites
+// If the data in pendingWrites exceeds the size of one segment,
+// it will return a 'ErrPendingSizeTooLarge' error and clear the pendingWrites.
 func (wal *WAL) PendingWrites(data []byte) error {
 	wal.pendingWritesLock.Lock()
 	defer wal.pendingWritesLock.Unlock()
@@ -326,8 +327,8 @@ func (wal *WAL) PendingWrites(data []byte) error {
 	return nil
 }
 
-// flushActiveSegment create a new segment file and replace the activeSegment.
-func (wal *WAL) flushActiveSegment() error {
+// rotateActiveSegment create a new segment file and replace the activeSegment.
+func (wal *WAL) rotateActiveSegment() error {
 	if err := wal.activeSegment.Sync(); err != nil {
 		return err
 	}
@@ -354,17 +355,20 @@ func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
 		wal.mu.Unlock()
 	}()
 
+	// if the active segment file is full, sync it and create a new one.
 	if wal.activeSegment.Size()+wal.pendingSize > wal.options.SegmentSize {
-		if err := wal.flushActiveSegment(); err != nil {
+		if err := wal.rotateActiveSegment(); err != nil {
 			return nil, err
 		}
 	}
 
+	// write all data to the active segment file.
 	positions, err := wal.activeSegment.writeAll(wal.pendingWrites)
 	if err != nil {
 		return nil, err
 	}
 
+	// sync the active segment file to ensure the durability.
 	if err := wal.activeSegment.Sync(); err != nil {
 		return nil, err
 	}
@@ -383,7 +387,7 @@ func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	}
 	// if the active segment file is full, sync it and create a new one.
 	if wal.isFull(int64(len(data))) {
-		if err := wal.flushActiveSegment(); err != nil {
+		if err := wal.rotateActiveSegment(); err != nil {
 			return nil, err
 		}
 	}

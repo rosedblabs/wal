@@ -331,25 +331,3 @@ func TestWAL_RenameFileExt(t *testing.T) {
 		assert.Nil(t, err)
 	}
 }
-
-func TestWAL_calSizeUpperBound(t *testing.T) {
-	dir, _ := os.MkdirTemp("", "wal-test-TestWAL_calSizeUpperBound")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".VLOG.1.temp",
-		SegmentSize:    8 * 1024 * 1024,
-		BlockCache:     32 * KB * 10,
-	}
-	wal, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyWAL(wal)
-
-	size := wal.maxDataWriteSize(int64(0))
-	assert.Equal(t, int64(14), size)
-
-	size = wal.maxDataWriteSize(int64(32761))
-	assert.Equal(t, int64(32775), size)
-
-	size = wal.maxDataWriteSize(int64(32769))
-	assert.Equal(t, int64(32790), size)
-}

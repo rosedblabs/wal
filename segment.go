@@ -180,16 +180,21 @@ func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteB
 		return nil, ErrClosed
 	}
 
+	// if the left block size can not hold the chunk header, padding the block
 	if seg.currentBlockSize+chunkHeaderSize >= blockSize {
 		// padding if necessary
 		if seg.currentBlockSize < blockSize {
-			chunkBuffer.Write(make([]byte, blockSize-seg.currentBlockSize))
+			p := make([]byte, blockSize-seg.currentBlockSize)
+			chunkBuffer.B = append(chunkBuffer.B, p...)
 			padding += blockSize - seg.currentBlockSize
+
+			// a new block
 			seg.currentBlockNumber += 1
 			seg.currentBlockSize = 0
 		}
-
 	}
+
+	// return the start position of the chunk, for reading.
 	position := &ChunkPosition{
 		SegmentId:   seg.id,
 		BlockNumber: seg.currentBlockNumber,
@@ -240,9 +245,12 @@ func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteB
 
 		position.ChunkSize = blockCount*chunkHeaderSize + dataSize
 	}
+
+	// the buffer length must be equal to chunkSize+padding length
 	endLen := chunkBuffer.Len()
 	if position.ChunkSize+padding != uint32(endLen-startLen) {
-		panic(fmt.Sprintf("chunk size %d, len %d", position.ChunkSize, endLen-startLen-int(padding)))
+		panic(fmt.Sprintf("wrong!!! the chunk size %d is not equal to the buffer len %d",
+			position.ChunkSize+padding, endLen-startLen))
 	}
 
 	// update segment status
@@ -261,6 +269,7 @@ func (seg *segment) writeAll(data [][]byte) (positions []*ChunkPosition, err err
 		return nil, ErrClosed
 	}
 
+	// if any error occurs, restore the segment status
 	originBlockNumber := seg.currentBlockNumber
 	originBlockSize := seg.currentBlockSize
 
@@ -276,6 +285,7 @@ func (seg *segment) writeAll(data [][]byte) (positions []*ChunkPosition, err err
 		bytebufferpool.Put(chunkBuffer)
 	}()
 
+	// write all data to the chunk buffer
 	var pos *ChunkPosition
 	positions = make([]*ChunkPosition, len(data))
 	for i := 0; i < len(positions); i++ {
@@ -285,6 +295,7 @@ func (seg *segment) writeAll(data [][]byte) (positions []*ChunkPosition, err err
 		}
 		positions[i] = pos
 	}
+	// write the chunk buffer to the segment file
 	if err = seg.writeChunkBuffer(chunkBuffer); err != nil {
 		return
 	}
