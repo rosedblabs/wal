@@ -173,7 +173,7 @@ func (seg *segment) Size() int64 {
 // Each chunk has a header, and the header contains the length, type and checksum.
 // And the payload of the chunk is the real data you want to Write.
 func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteBuffer) (*ChunkPosition, error) {
-	startLen := chunkBuffer.Len()
+	startBufferLen := chunkBuffer.Len()
 	padding := uint32(0)
 
 	if seg.closed {
@@ -247,10 +247,10 @@ func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteB
 	}
 
 	// the buffer length must be equal to chunkSize+padding length
-	endLen := chunkBuffer.Len()
-	if position.ChunkSize+padding != uint32(endLen-startLen) {
+	endBufferLen := chunkBuffer.Len()
+	if position.ChunkSize+padding != uint32(endBufferLen-startBufferLen) {
 		panic(fmt.Sprintf("wrong!!! the chunk size %d is not equal to the buffer len %d",
-			position.ChunkSize+padding, endLen-startLen))
+			position.ChunkSize+padding, endBufferLen-startBufferLen))
 	}
 
 	// update segment status
@@ -323,11 +323,12 @@ func (seg *segment) Write(data []byte) (pos *ChunkPosition, err error) {
 		bytebufferpool.Put(chunkBuffer)
 	}()
 
+	// write all data to the chunk buffer
 	pos, err = seg.writeToBuffer(data, chunkBuffer)
 	if err != nil {
 		return
 	}
-
+	// write the chunk buffer to the segment file
 	if err = seg.writeChunkBuffer(chunkBuffer); err != nil {
 		return
 	}
@@ -356,6 +357,7 @@ func (seg *segment) writeChunkBuffer(buf *bytebufferpool.ByteBuffer) error {
 		panic("wrong! can not exceed the block size")
 	}
 
+	// write the data into underlying file
 	if _, err := seg.fd.Write(buf.Bytes()); err != nil {
 		return err
 	}
@@ -444,7 +446,7 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		if chunkType == ChunkTypeFull || chunkType == ChunkTypeLast {
 			nextChunk.BlockNumber = blockNumber
 			nextChunk.ChunkOffset = checksumEnd
-			// If this is the last chunk interhe block, and the left block
+			// If this is the last chunk in the block, and the left block
 			// space are paddings, the next chunk should be in the next block.
 			if checksumEnd+chunkHeaderSize >= blockSize {
 				nextChunk.BlockNumber += 1
