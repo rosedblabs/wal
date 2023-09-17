@@ -344,6 +344,7 @@ func (wal *WAL) rotateActiveSegment() error {
 }
 
 // WriteAll write wal.pendingWrites to WAL and then clear pendingWrites
+// WriteAll will Not sync segment based on wal.options
 func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
 	if len(wal.pendingWrites) == 0 {
 		return make([]*ChunkPosition, 0), nil
@@ -365,11 +366,6 @@ func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
 	// write all data to the active segment file.
 	positions, err := wal.activeSegment.writeAll(wal.pendingWrites)
 	if err != nil {
-		return nil, err
-	}
-
-	// sync the active segment file to ensure the durability.
-	if err := wal.activeSegment.Sync(); err != nil {
 		return nil, err
 	}
 
