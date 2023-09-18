@@ -1,3 +1,13 @@
+# Release 1.3.4 (2023-09-18)
+
+## 🚀 New Features
+* add RenameFileExt function
+
+## 🎠 Community
+* Thanks to @akiozihao 
+    * add EncodeFixedSize (https://github.com/rosedblabs/wal/pull/28)
+    * add WriteBatch (https://github.com/rosedblabs/wal/pull/26)
+
 # Release 1.3.3 (2023-08-19)
 
 ## 🎠 Community
