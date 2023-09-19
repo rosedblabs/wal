@@ -1,3 +1,8 @@
+# Release 1.3.5 (2023-09-19)
+
+## 🎄 Enhancements
+* Rotate file when pending writes exceed the left space of the segment file.
+
 # Release 1.3.4 (2023-09-18)
 
 ## 🚀 New Features
