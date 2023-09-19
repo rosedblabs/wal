@@ -305,6 +305,9 @@ func (r *Reader) CurrentChunkPosition() *ChunkPosition {
 
 // ClearPendingWrites clear pendingWrite and reset pendingSize
 func (wal *WAL) ClearPendingWrites() {
+	wal.pendingWritesLock.Lock()
+	defer wal.pendingWritesLock.Unlock()
+
 	wal.pendingSize = 0
 	wal.pendingWrites = wal.pendingWrites[:0]
 }
@@ -317,11 +320,6 @@ func (wal *WAL) PendingWrites(data []byte) error {
 	defer wal.pendingWritesLock.Unlock()
 
 	size := wal.maxDataWriteSize(int64(len(data)))
-	if size+wal.pendingSize > wal.options.SegmentSize {
-		wal.ClearPendingWrites()
-		return ErrPendingSizeTooLarge
-	}
-
 	wal.pendingSize += size
 	wal.pendingWrites = append(wal.pendingWrites, data)
 	return nil
@@ -343,8 +341,8 @@ func (wal *WAL) rotateActiveSegment() error {
 	return nil
 }
 
-// WriteAll write wal.pendingWrites to WAL and then clear pendingWrites
-// WriteAll will Not sync segment based on wal.options
+// WriteAll write wal.pendingWrites to WAL and then clear pendingWrites,
+// it will not sync the segment file based on wal.options, you should call Sync() manually.
 func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
 	if len(wal.pendingWrites) == 0 {
 		return make([]*ChunkPosition, 0), nil
@@ -361,6 +359,10 @@ func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
 		if err := wal.rotateActiveSegment(); err != nil {
 			return nil, err
 		}
+	}
+	// if the pending size is still larger than segment size, return error
+	if wal.pendingSize > wal.options.SegmentSize {
+		return nil, ErrPendingSizeTooLarge
 	}
 
 	// write all data to the active segment file.
