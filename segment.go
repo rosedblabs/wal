@@ -194,7 +194,7 @@ func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteB
 		}
 	}
 
-	// return the start position of the chunk, for reading.
+	// return the start position of the chunk, then the user can use it to read the data.
 	position := &ChunkPosition{
 		SegmentId:   seg.id,
 		BlockNumber: seg.currentBlockNumber,
@@ -242,7 +242,6 @@ func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteB
 			blockCount += 1
 			currBlockSize = (currBlockSize + chunkSize + chunkHeaderSize) % blockSize
 		}
-
 		position.ChunkSize = blockCount*chunkHeaderSize + dataSize
 	}
 
@@ -281,7 +280,6 @@ func (seg *segment) writeAll(data [][]byte) (positions []*ChunkPosition, err err
 			seg.currentBlockNumber = originBlockNumber
 			seg.currentBlockSize = originBlockSize
 		}
-		chunkBuffer.Reset()
 		bytebufferpool.Put(chunkBuffer)
 	}()
 
@@ -319,7 +317,6 @@ func (seg *segment) Write(data []byte) (pos *ChunkPosition, err error) {
 			seg.currentBlockNumber = originBlockNumber
 			seg.currentBlockSize = originBlockSize
 		}
-		chunkBuffer.Reset()
 		bytebufferpool.Put(chunkBuffer)
 	}()
 
