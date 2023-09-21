@@ -354,15 +354,16 @@ func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
 		wal.mu.Unlock()
 	}()
 
+	// if the pending size is still larger than segment size, return error
+	if wal.pendingSize > wal.options.SegmentSize {
+		return nil, ErrPendingSizeTooLarge
+	}
+
 	// if the active segment file is full, sync it and create a new one.
 	if wal.activeSegment.Size()+wal.pendingSize > wal.options.SegmentSize {
 		if err := wal.rotateActiveSegment(); err != nil {
 			return nil, err
 		}
-	}
-	// if the pending size is still larger than segment size, return error
-	if wal.pendingSize > wal.options.SegmentSize {
-		return nil, ErrPendingSizeTooLarge
 	}
 
 	// write all data to the active segment file.
