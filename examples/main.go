@@ -3,23 +3,30 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/rosedblabs/wal"
 )
 
 func main() {
-	wal, _ := wal.Open(wal.DefaultOptions)
+	walFile, _ := wal.Open(wal.DefaultOptions)
 	// write some data
-	chunkPosition, _ := wal.Write([]byte("some data 1"))
+	chunkPosition, _ := walFile.Write([]byte("some data 1"))
 	// read by the position
-	val, _ := wal.Read(chunkPosition)
+	val, _ := walFile.Read(chunkPosition)
 	fmt.Println(string(val))
 
-	wal.Write([]byte("some data 2"))
-	wal.Write([]byte("some data 3"))
+	_, err := walFile.Write([]byte("some data 2"))
+	if err != nil {
+		log.Println(err)
+	}
+	_, err = walFile.Write([]byte("some data 3"))
+	if err != nil {
+		log.Println(err)
+	}
 
 	// iterate all data in wal
-	reader := wal.NewReader()
+	reader := walFile.NewReader()
 	for {
 		val, pos, err := reader.Next()
 		if err == io.EOF {
