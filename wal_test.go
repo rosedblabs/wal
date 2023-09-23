@@ -190,8 +190,7 @@ func TestWAL_Reader(t *testing.T) {
 func testWriteAllIterate(t *testing.T, wal *WAL, size, valueSize int) {
 	for i := 0; i < size; i++ {
 		val := strings.Repeat("wal", valueSize)
-		err := wal.PendingWrites([]byte(val))
-		assert.Nil(t, err)
+		wal.PendingWrites([]byte(val))
 	}
 	positions, err := wal.WriteAll()
 	assert.Nil(t, err)

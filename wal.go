@@ -315,14 +315,13 @@ func (wal *WAL) ClearPendingWrites() {
 // PendingWrites add data to wal.pendingWrites and wait for batch write.
 // If the data in pendingWrites exceeds the size of one segment,
 // it will return a 'ErrPendingSizeTooLarge' error and clear the pendingWrites.
-func (wal *WAL) PendingWrites(data []byte) error {
+func (wal *WAL) PendingWrites(data []byte) {
 	wal.pendingWritesLock.Lock()
 	defer wal.pendingWritesLock.Unlock()
 
 	size := wal.maxDataWriteSize(int64(len(data)))
 	wal.pendingSize += size
 	wal.pendingWrites = append(wal.pendingWrites, data)
-	return nil
 }
 
 // rotateActiveSegment create a new segment file and replace the activeSegment.
