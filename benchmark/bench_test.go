@@ -17,7 +17,7 @@ func init() {
 	opts := wal.Options{
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
+		SegmentSize:    wal.GB,
 	}
 	var err error
 	walFile, err = wal.Open(opts)
@@ -56,7 +56,7 @@ func BenchmarkWAL_WriteBatch(b *testing.B) {
 		walFile.PendingWrites([]byte(strings.Repeat("X", wal.MB)))
 		pos, err := walFile.WriteAll()
 		assert.Nil(b, err)
-		assert.Equal(b, 0, len(pos))
+		assert.Equal(b, 32, len(pos))
 	}
 }
 
