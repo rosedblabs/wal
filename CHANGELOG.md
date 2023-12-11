@@ -1,3 +1,13 @@
+# Release 1.3.6 (2023-09-25)
+
+## 🎄 Enhancements
+* avoid resetting pool to optimize the memory usage
+* no need to return err in pendingWrites
+* fix benchmark error
+## 🎠 Community
+* Thanks to @akiozihao 
+    * check ErrPendingSizeTooLarge first (https://github.com/rosedblabs/wal/pull/32)
+
 # Release 1.3.5 (2023-09-19)
 
 ## 🎄 Enhancements
