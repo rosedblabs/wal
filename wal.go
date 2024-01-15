@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/DataDog/zstd"
+	"github.com/golang/snappy"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -58,6 +60,7 @@ type WAL struct {
 type Reader struct {
 	segmentReaders []*segmentReader
 	currentReader  int
+	Compressor     CompressorType
 }
 
 // Open opens a WAL with the given options.
@@ -219,6 +222,7 @@ func (wal *WAL) NewReaderWithMax(segId SegmentID) *Reader {
 	return &Reader{
 		segmentReaders: segmentReaders,
 		currentReader:  0,
+		Compressor:     wal.options.Compressor,
 	}
 }
 
@@ -276,6 +280,20 @@ func (r *Reader) Next() ([]byte, *ChunkPosition, error) {
 		r.currentReader++
 		return r.Next()
 	}
+	switch r.Compressor {
+	case Snappy:
+		data, err = snappy.Decode(nil, data)
+		if err != nil {
+			return nil, nil, err
+		}
+	case Zstd:
+		deCompressedData, err := zstd.Decompress(nil, data)
+		if err != nil {
+			return nil, nil, err
+		}
+		data = deCompressedData
+	}
+
 	return data, position, err
 }
 
@@ -313,8 +331,6 @@ func (wal *WAL) ClearPendingWrites() {
 }
 
 // PendingWrites add data to wal.pendingWrites and wait for batch write.
-// If the data in pendingWrites exceeds the size of one segment,
-// it will return a 'ErrPendingSizeTooLarge' error and clear the pendingWrites.
 func (wal *WAL) PendingWrites(data []byte) {
 	wal.pendingWritesLock.Lock()
 	defer wal.pendingWritesLock.Unlock()
@@ -342,6 +358,8 @@ func (wal *WAL) rotateActiveSegment() error {
 
 // WriteAll write wal.pendingWrites to WAL and then clear pendingWrites,
 // it will not sync the segment file based on wal.options, you should call Sync() manually.
+// If the data in pendingWrites exceeds the size of one segment,
+// it will return a 'ErrPendingSizeTooLarge' error and clear the pendingWrites.
 func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
 	if len(wal.pendingWrites) == 0 {
 		return make([]*ChunkPosition, 0), nil
@@ -380,9 +398,22 @@ func (wal *WAL) WriteAll() ([]*ChunkPosition, error) {
 func (wal *WAL) Write(data []byte) (*ChunkPosition, error) {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
+
+	switch wal.options.Compressor {
+	case Snappy:
+		data = snappy.Encode(nil, data)
+	case Zstd:
+		CompressedData, err := zstd.Compress(nil, data)
+		if err != nil {
+			return nil, err
+		}
+		data = CompressedData
+	}
+
 	if int64(len(data))+chunkHeaderSize > wal.options.SegmentSize {
 		return nil, ErrValueTooLarge
 	}
+
 	// if the active segment file is full, sync it and create a new one.
 	if wal.isFull(int64(len(data))) {
 		if err := wal.rotateActiveSegment(); err != nil {
@@ -432,7 +463,25 @@ func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 	}
 
 	// read the data from the segment file.
-	return segment.Read(pos.BlockNumber, pos.ChunkOffset)
+	data, err := segment.Read(pos.BlockNumber, pos.ChunkOffset)
+	if err != nil {
+		return nil, err
+	}
+	switch wal.options.Compressor {
+	case Snappy:
+		data, err = snappy.Decode(nil, data)
+		if err != nil {
+			return nil, err
+		}
+	case Zstd:
+		deCompressedData, err := zstd.Decompress(nil, data)
+		if err != nil {
+			return nil, err
+		}
+		data = deCompressedData
+	}
+
+	return data, nil
 }
 
 // Close closes the WAL.

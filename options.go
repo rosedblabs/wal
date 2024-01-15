@@ -34,6 +34,9 @@ type Options struct {
 
 	// BytesPerSync specifies the number of bytes to write before calling fsync.
 	BytesPerSync uint32
+
+	//  Compressor specifies the compressor type.
+	Compressor CompressorType
 }
 
 const (
@@ -43,6 +46,14 @@ const (
 	GB = 1024 * MB
 )
 
+type CompressorType uint8
+
+const (
+	None CompressorType = iota
+	Snappy
+	Zstd
+)
+
 var DefaultOptions = Options{
 	DirPath:        os.TempDir(),
 	SegmentSize:    GB,
@@ -50,4 +61,5 @@ var DefaultOptions = Options{
 	BlockCache:     32 * KB * 10,
 	Sync:           false,
 	BytesPerSync:   0,
+	Compressor:     Snappy,
 }
