@@ -9,7 +9,6 @@ import (
 	"os"
 	"sync"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/valyala/bytebufferpool"
 )
 
@@ -53,7 +52,6 @@ type segment struct {
 	currentBlockNumber uint32
 	currentBlockSize   uint32
 	closed             bool
-	cache              *lru.Cache[uint64, []byte]
 	header             []byte
 	blockPool          sync.Pool
 }
@@ -86,7 +84,7 @@ type ChunkPosition struct {
 }
 
 // openSegmentFile a new segment file.
-func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64, []byte]) (*segment, error) {
+func openSegmentFile(dirPath, extName string, id uint32) (*segment, error) {
 	fd, err := os.OpenFile(
 		SegmentFileName(dirPath, extName, id),
 		os.O_CREATE|os.O_RDWR|os.O_APPEND,
@@ -106,7 +104,6 @@ func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64
 	return &segment{
 		id:                 id,
 		fd:                 fd,
-		cache:              cache,
 		header:             make([]byte, chunkHeaderSize),
 		blockPool:          sync.Pool{New: newBlockAndHeader},
 		currentBlockNumber: uint32(offset / blockSize),
@@ -394,29 +391,10 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 			return nil, nil, io.EOF
 		}
 
-		var ok bool
-		var cachedBlock []byte
-		// try to read from the cache if it is enabled
-		if seg.cache != nil {
-			cachedBlock, ok = seg.cache.Get(seg.getCacheKey(blockNumber))
-		}
-		// cache hit, get block from the cache
-		if ok {
-			copy(bh.block, cachedBlock)
-		} else {
-			// cache miss, read block from the segment file
-			_, err := seg.fd.ReadAt(bh.block[0:size], offset)
-			if err != nil {
-				return nil, nil, err
-			}
-			// cache the block, so that the next time it can be read from the cache.
-			// if the block size is smaller than blockSize, it means that the block is not full,
-			// so we will not cache it.
-			if seg.cache != nil && size == blockSize && len(cachedBlock) == 0 {
-				cacheBlock := make([]byte, blockSize)
-				copy(cacheBlock, bh.block)
-				seg.cache.Add(seg.getCacheKey(blockNumber), cacheBlock)
-			}
+		// cache miss, read block from the segment file
+		_, err := seg.fd.ReadAt(bh.block[0:size], offset)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		// header
@@ -455,10 +433,6 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 		chunkOffset = 0
 	}
 	return result, nextChunk, nil
-}
-
-func (seg *segment) getCacheKey(blockNumber uint32) uint64 {
-	return uint64(seg.id)<<32 | uint64(blockNumber)
 }
 
 // Next returns the Next chunk data.

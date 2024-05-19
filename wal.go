@@ -9,8 +9,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-
-	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 const (
@@ -41,7 +39,6 @@ type WAL struct {
 	olderSegments     map[SegmentID]*segment // older segment files, only used for read.
 	options           Options
 	mu                sync.RWMutex
-	blockCache        *lru.Cache[uint64, []byte]
 	bytesWrite        uint32
 	renameIds         []SegmentID
 	pendingWrites     [][]byte
@@ -67,9 +64,6 @@ func Open(options Options) (*WAL, error) {
 	if !strings.HasPrefix(options.SegmentFileExt, ".") {
 		return nil, fmt.Errorf("segment file extension must start with '.'")
 	}
-	if options.BlockCache > uint32(options.SegmentSize) {
-		return nil, fmt.Errorf("BlockCache must be smaller than SegmentSize")
-	}
 	wal := &WAL{
 		options:       options,
 		olderSegments: make(map[SegmentID]*segment),
@@ -79,19 +73,6 @@ func Open(options Options) (*WAL, error) {
 	// create the directory if not exists.
 	if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
 		return nil, err
-	}
-
-	// create the block cache if needed.
-	if options.BlockCache > 0 {
-		var lruSize = options.BlockCache / blockSize
-		if options.BlockCache%blockSize != 0 {
-			lruSize += 1
-		}
-		cache, err := lru.New[uint64, []byte](int(lruSize))
-		if err != nil {
-			return nil, err
-		}
-		wal.blockCache = cache
 	}
 
 	// iterate the dir and open all segment files.
@@ -117,7 +98,7 @@ func Open(options Options) (*WAL, error) {
 	// empty directory, just initialize a new segment file.
 	if len(segmentIDs) == 0 {
 		segment, err := openSegmentFile(options.DirPath, options.SegmentFileExt,
-			initialSegmentFileID, wal.blockCache)
+			initialSegmentFileID)
 		if err != nil {
 			return nil, err
 		}
@@ -128,7 +109,7 @@ func Open(options Options) (*WAL, error) {
 
 		for i, segId := range segmentIDs {
 			segment, err := openSegmentFile(options.DirPath, options.SegmentFileExt,
-				uint32(segId), wal.blockCache)
+				uint32(segId))
 			if err != nil {
 				return nil, err
 			}
@@ -163,7 +144,7 @@ func (wal *WAL) OpenNewActiveSegment() error {
 	}
 	// create a new segment file and set it as the active one.
 	segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
-		wal.activeSegment.id+1, wal.blockCache)
+		wal.activeSegment.id+1)
 	if err != nil {
 		return err
 	}
@@ -331,7 +312,7 @@ func (wal *WAL) rotateActiveSegment() error {
 	}
 	wal.bytesWrite = 0
 	segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
-		wal.activeSegment.id+1, wal.blockCache)
+		wal.activeSegment.id+1)
 	if err != nil {
 		return err
 	}
@@ -440,11 +421,6 @@ func (wal *WAL) Close() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
 
-	// purge the block cache.
-	if wal.blockCache != nil {
-		wal.blockCache.Purge()
-	}
-
 	// close all segment files.
 	for _, segment := range wal.olderSegments {
 		if err := segment.Close(); err != nil {
@@ -463,11 +439,6 @@ func (wal *WAL) Close() error {
 func (wal *WAL) Delete() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
-
-	// purge the block cache.
-	if wal.blockCache != nil {
-		wal.blockCache.Purge()
-	}
 
 	// delete all segment files.
 	for _, segment := range wal.olderSegments {

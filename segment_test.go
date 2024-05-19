@@ -8,13 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSegment_Write_FULL1(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-full1")
-	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -40,15 +39,15 @@ func TestSegment_Write_FULL1(t *testing.T) {
 	for i := 0; i < 100000; i++ {
 		pos, err := seg.Write(val)
 		assert.Nil(t, err)
-		val, err := seg.Read(pos.BlockNumber, pos.ChunkOffset)
+		res, err := seg.Read(pos.BlockNumber, pos.ChunkOffset)
 		assert.Nil(t, err)
-		assert.Equal(t, val, val)
+		assert.Equal(t, val, res)
 	}
 }
 
 func TestSegment_Write_FULL2(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-full2")
-	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -76,7 +75,7 @@ func TestSegment_Write_FULL2(t *testing.T) {
 
 func TestSegment_Write_Padding(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-padding")
-	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -99,7 +98,7 @@ func TestSegment_Write_Padding(t *testing.T) {
 
 func TestSegment_Write_NOT_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-not-full")
-	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -137,7 +136,7 @@ func TestSegment_Write_NOT_FULL(t *testing.T) {
 
 func TestSegment_Reader_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-full")
-	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -169,7 +168,7 @@ func TestSegment_Reader_FULL(t *testing.T) {
 
 func TestSegment_Reader_Padding(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-padding")
-	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -203,7 +202,7 @@ func TestSegment_Reader_Padding(t *testing.T) {
 
 func TestSegment_Reader_NOT_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-not-full")
-	seg, err := openSegmentFile(dir, ".SEG", 1, nil)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -249,8 +248,7 @@ func TestSegment_Reader_NOT_FULL(t *testing.T) {
 
 func TestSegment_Reader_ManyChunks_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-ManyChunks_FULL")
-	cache, _ := lru.New[uint64, []byte](5)
-	seg, err := openSegmentFile(dir, ".SEG", 1, cache)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -287,8 +285,7 @@ func TestSegment_Reader_ManyChunks_FULL(t *testing.T) {
 
 func TestSegment_Reader_ManyChunks_NOT_FULL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-ManyChunks_NOT_FULL")
-	cache, _ := lru.New[uint64, []byte](5)
-	seg, err := openSegmentFile(dir, ".SEG", 1, cache)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()
@@ -337,8 +334,7 @@ func TestSegment_Write_LargeSize(t *testing.T) {
 
 func testSegmentReaderLargeSize(t *testing.T, size int, count int) {
 	dir, _ := os.MkdirTemp("", "seg-test-reader-ManyChunks_large_size")
-	cache, _ := lru.New[uint64, []byte](5)
-	seg, err := openSegmentFile(dir, ".SEG", 1, cache)
+	seg, err := openSegmentFile(dir, ".SEG", 1)
 	assert.Nil(t, err)
 	defer func() {
 		_ = seg.Remove()

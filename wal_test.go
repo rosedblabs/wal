@@ -1,12 +1,11 @@
 package wal
 
 import (
+	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func destroyWAL(wal *WAL) {
@@ -22,7 +21,6 @@ func TestWAL_WriteALL(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
-		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -41,7 +39,6 @@ func TestWAL_Write(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
-		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -75,7 +72,6 @@ func TestWAL_Write_large(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
-		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -143,7 +139,6 @@ func TestWAL_Reader(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
-		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -248,7 +243,6 @@ func TestWAL_Delete(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    32 * 1024 * 1024,
-		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -270,7 +264,6 @@ func TestWAL_ReaderWithStart(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".SEG",
 		SegmentSize:    8 * 1024 * 1024,
-		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
@@ -306,7 +299,6 @@ func TestWAL_RenameFileExt(t *testing.T) {
 		DirPath:        dir,
 		SegmentFileExt: ".VLOG.1.temp",
 		SegmentSize:    8 * 1024 * 1024,
-		BlockCache:     32 * KB * 10,
 	}
 	wal, err := Open(opts)
 	assert.Nil(t, err)
