@@ -12,7 +12,7 @@ Write Ahead Log for LSM or bitcask storage, with block cache.
 
 ## Design Overview
 
-![](https://img-blog.csdnimg.cn/3910507c20a04f9190c3664e3657a4b1.png#pic_center)
+![wal-logo.png](https://s2.loli.net/2024/05/19/Iz4JML2SokFdrfN.png)
 
 ## Format
 

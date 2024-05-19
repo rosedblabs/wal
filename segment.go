@@ -4,12 +4,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/valyala/bytebufferpool"
 	"hash/crc32"
 	"io"
 	"os"
-	"sync"
-
-	"github.com/valyala/bytebufferpool"
 )
 
 type ChunkType = byte
@@ -53,7 +51,7 @@ type segment struct {
 	currentBlockSize   uint32
 	closed             bool
 	header             []byte
-	blockPool          sync.Pool
+	cachedBlock        *blockAndHeader
 }
 
 // segmentReader is used to iterate all the data from the segment file.
@@ -67,8 +65,9 @@ type segmentReader struct {
 
 // block and chunk header, saved in pool.
 type blockAndHeader struct {
-	block  []byte
-	header []byte
+	block       []byte
+	header      []byte
+	blockNumber int64
 }
 
 // ChunkPosition represents the position of a chunk in a segment file.
@@ -101,21 +100,21 @@ func openSegmentFile(dirPath, extName string, id uint32) (*segment, error) {
 		panic(fmt.Errorf("seek to the end of segment file %d%s failed: %v", id, extName, err))
 	}
 
+	// init cached block
+	bh := &blockAndHeader{
+		block:       make([]byte, blockSize),
+		header:      make([]byte, chunkHeaderSize),
+		blockNumber: -1,
+	}
+
 	return &segment{
 		id:                 id,
 		fd:                 fd,
 		header:             make([]byte, chunkHeaderSize),
-		blockPool:          sync.Pool{New: newBlockAndHeader},
 		currentBlockNumber: uint32(offset / blockSize),
 		currentBlockSize:   uint32(offset % blockSize),
+		cachedBlock:        bh,
 	}, nil
-}
-
-func newBlockAndHeader() interface{} {
-	return &blockAndHeader{
-		block:  make([]byte, blockSize),
-		header: make([]byte, chunkHeaderSize),
-	}
 }
 
 // NewReader creates a new segment reader.
@@ -356,6 +355,8 @@ func (seg *segment) writeChunkBuffer(buf *bytebufferpool.ByteBuffer) error {
 		return err
 	}
 
+	// the cached block can not be reused again after writes.
+	seg.cachedBlock.blockNumber = -1
 	return nil
 }
 
@@ -372,13 +373,10 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 
 	var (
 		result    []byte
-		bh        = seg.blockPool.Get().(*blockAndHeader)
+		bh        = seg.cachedBlock
 		segSize   = seg.Size()
 		nextChunk = &ChunkPosition{SegmentId: seg.id}
 	)
-	defer func() {
-		seg.blockPool.Put(bh)
-	}()
 
 	for {
 		size := int64(blockSize)
@@ -391,10 +389,18 @@ func (seg *segment) readInternal(blockNumber uint32, chunkOffset int64) ([]byte,
 			return nil, nil, io.EOF
 		}
 
-		// cache miss, read block from the segment file
-		_, err := seg.fd.ReadAt(bh.block[0:size], offset)
-		if err != nil {
-			return nil, nil, err
+		// There are two cases that we should read block from file:
+		// 1. the acquired block is not the cached one
+		// 2. new writes appended to the block, and the block
+		// is still smaller than 32KB, we must read it again because of the new writes.
+		if seg.cachedBlock.blockNumber != int64(blockNumber) || size != blockSize {
+			// read block from segment file at the specified offset.
+			_, err := seg.fd.ReadAt(bh.block[0:size], offset)
+			if err != nil {
+				return nil, nil, err
+			}
+			// remember the block
+			bh.blockNumber = int64(blockNumber)
 		}
 
 		// header

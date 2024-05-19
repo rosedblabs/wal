@@ -30,10 +30,6 @@ var (
 //
 // The mu sync.RWMutex is used for concurrent access to the WAL data structure,
 // ensuring safe access and modification.
-//
-// The blockCache is an LRU cache used to store recently accessed data blocks,
-// improving read performance by reducing disk I/O.
-// It is implemented using a lru.Cache structure with keys of type uint64 and values of type []byte.
 type WAL struct {
 	activeSegment     *segment               // active segment file, used for new incoming writes.
 	olderSegments     map[SegmentID]*segment // older segment files, only used for read.
