@@ -1,13 +1,13 @@
 # wal
-Write Ahead Log for LSM or bitcask storage, with block cache.
+Write Ahead Log for LSM or bitcask storage.
 
 ## Key Features
 * Disk based, support large data volume
 * Append only write, high performance
 * Fast read, one disk seek to retrieve any value
-* Support Block Cache, improve read performance
 * Support batch write, all data in a batch will be written in a single disk seek
 * Iterate all data in wal with `NewReader` function
+* Extremely fast read
 * Support concurrent write and read, all functions are thread safe
 
 ## Design Overview
