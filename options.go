@@ -1,6 +1,10 @@
 package wal
 
-import "os"
+import (
+	"os"
+
+	"github.com/spf13/afero"
+)
 
 // Options represents the configuration options for a Write-Ahead Log (WAL).
 type Options struct {
@@ -29,6 +33,8 @@ type Options struct {
 
 	// BytesPerSync specifies the number of bytes to write before calling fsync.
 	BytesPerSync uint32
+
+	Fs afero.Fs
 }
 
 const (

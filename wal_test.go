@@ -1,17 +1,18 @@
 package wal
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func destroyWAL(wal *WAL) {
 	if wal != nil {
 		_ = wal.Close()
-		_ = os.RemoveAll(wal.options.DirPath)
+		_ = wal.fs.RemoveAll(wal.options.DirPath)
 	}
 }
 
