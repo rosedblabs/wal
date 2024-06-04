@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/spf13/afero"
 	"github.com/valyala/bytebufferpool"
 )
 
@@ -48,8 +49,9 @@ const (
 // The segment file is append-only, and the data is written in blocks.
 // Each block is 32KB, and the data is written in chunks.
 type segment struct {
+	fs                 afero.Fs
 	id                 SegmentID
-	fd                 *os.File
+	fd                 afero.File
 	currentBlockNumber uint32
 	currentBlockSize   uint32
 	closed             bool
@@ -86,8 +88,8 @@ type ChunkPosition struct {
 }
 
 // openSegmentFile a new segment file.
-func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64, []byte]) (*segment, error) {
-	fd, err := os.OpenFile(
+func openSegmentFile(fs afero.Fs, dirPath, extName string, id uint32, cache *lru.Cache[uint64, []byte]) (*segment, error) {
+	fd, err := fs.OpenFile(
 		SegmentFileName(dirPath, extName, id),
 		os.O_CREATE|os.O_RDWR|os.O_APPEND,
 		fileModePerm,
@@ -104,6 +106,7 @@ func openSegmentFile(dirPath, extName string, id uint32, cache *lru.Cache[uint64
 	}
 
 	return &segment{
+		fs:                 fs,
 		id:                 id,
 		fd:                 fd,
 		cache:              cache,
@@ -147,7 +150,7 @@ func (seg *segment) Remove() error {
 		_ = seg.fd.Close()
 	}
 
-	return os.Remove(seg.fd.Name())
+	return seg.fs.Remove(seg.fd.Name())
 }
 
 // Close closes the segment file.

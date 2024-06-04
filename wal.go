@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/spf13/afero"
 )
 
 const (
@@ -37,6 +38,7 @@ var (
 // improving read performance by reducing disk I/O.
 // It is implemented using a lru.Cache structure with keys of type uint64 and values of type []byte.
 type WAL struct {
+	fs                afero.Fs
 	activeSegment     *segment               // active segment file, used for new incoming writes.
 	olderSegments     map[SegmentID]*segment // older segment files, only used for read.
 	options           Options
@@ -70,14 +72,19 @@ func Open(options Options) (*WAL, error) {
 	if options.BlockCache > uint32(options.SegmentSize) {
 		return nil, fmt.Errorf("BlockCache must be smaller than SegmentSize")
 	}
+	fs := options.Fs
+	if fs == nil {
+		fs = afero.NewOsFs()
+	}
 	wal := &WAL{
+		fs:            fs,
 		options:       options,
 		olderSegments: make(map[SegmentID]*segment),
 		pendingWrites: make([][]byte, 0),
 	}
 
 	// create the directory if not exists.
-	if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
+	if err := fs.MkdirAll(options.DirPath, os.ModePerm); err != nil {
 		return nil, err
 	}
 
@@ -95,7 +102,7 @@ func Open(options Options) (*WAL, error) {
 	}
 
 	// iterate the dir and open all segment files.
-	entries, err := os.ReadDir(options.DirPath)
+	entries, err := afero.ReadDir(fs, options.DirPath)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +123,7 @@ func Open(options Options) (*WAL, error) {
 
 	// empty directory, just initialize a new segment file.
 	if len(segmentIDs) == 0 {
-		segment, err := openSegmentFile(options.DirPath, options.SegmentFileExt,
+		segment, err := openSegmentFile(wal.fs, options.DirPath, options.SegmentFileExt,
 			initialSegmentFileID, wal.blockCache)
 		if err != nil {
 			return nil, err
@@ -127,7 +134,7 @@ func Open(options Options) (*WAL, error) {
 		sort.Ints(segmentIDs)
 
 		for i, segId := range segmentIDs {
-			segment, err := openSegmentFile(options.DirPath, options.SegmentFileExt,
+			segment, err := openSegmentFile(wal.fs, options.DirPath, options.SegmentFileExt,
 				uint32(segId), wal.blockCache)
 			if err != nil {
 				return nil, err
@@ -162,7 +169,7 @@ func (wal *WAL) OpenNewActiveSegment() error {
 		return err
 	}
 	// create a new segment file and set it as the active one.
-	segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
+	segment, err := openSegmentFile(wal.fs, wal.options.DirPath, wal.options.SegmentFileExt,
 		wal.activeSegment.id+1, wal.blockCache)
 	if err != nil {
 		return err
@@ -330,7 +337,7 @@ func (wal *WAL) rotateActiveSegment() error {
 		return err
 	}
 	wal.bytesWrite = 0
-	segment, err := openSegmentFile(wal.options.DirPath, wal.options.SegmentFileExt,
+	segment, err := openSegmentFile(wal.fs, wal.options.DirPath, wal.options.SegmentFileExt,
 		wal.activeSegment.id+1, wal.blockCache)
 	if err != nil {
 		return err
@@ -501,7 +508,7 @@ func (wal *WAL) RenameFileExt(ext string) error {
 	renameFile := func(id SegmentID) error {
 		oldName := SegmentFileName(wal.options.DirPath, wal.options.SegmentFileExt, id)
 		newName := SegmentFileName(wal.options.DirPath, ext, id)
-		return os.Rename(oldName, newName)
+		return wal.fs.Rename(oldName, newName)
 	}
 
 	for _, id := range wal.renameIds {
