@@ -1,3 +1,9 @@
+# Release 1.3.7 (2024-06-13)
+
+## 🎄 Enhancements
+* remove block cache(https://github.com/rosedblabs/wal/commit/e77db044463f4ba32455b7a0b42db3161248b5a4)
+* improve iterate performance(https://github.com/rosedblabs/wal/commit/213913a6a9145740cff75340de899b0ff03894e4)
+
 # Release 1.3.6 (2023-09-25)
 
 ## 🎄 Enhancements
