@@ -33,7 +33,7 @@ var (
 type WAL struct {
 	activeSegment     *segment               // active segment file, used for new incoming writes.
 	olderSegments     map[SegmentID]*segment // older segment files, only used for read.
-	options           Options
+	options           *Options
 	mu                sync.RWMutex
 	bytesWrite        uint32
 	renameIds         []SegmentID
@@ -56,7 +56,12 @@ type Reader struct {
 // Open opens a WAL with the given options.
 // It will create the directory if not exists, and open all segment files in the directory.
 // If there is no segment file in the directory, it will create a new one.
-func Open(options Options) (*WAL, error) {
+func Open(opts ...Option) (*WAL, error) {
+	options := &DefaultOptions
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	if !strings.HasPrefix(options.SegmentFileExt, ".") {
 		return nil, fmt.Errorf("segment file extension must start with '.'")
 	}
