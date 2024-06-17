@@ -4,10 +4,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/valyala/bytebufferpool"
 	"hash/crc32"
 	"io"
 	"os"
+
+	"github.com/valyala/bytebufferpool"
 )
 
 type ChunkType = byte
@@ -140,7 +141,9 @@ func (seg *segment) Sync() error {
 func (seg *segment) Remove() error {
 	if !seg.closed {
 		seg.closed = true
-		_ = seg.fd.Close()
+		if err := seg.fd.Close(); err != nil {
+			return err
+		}
 	}
 
 	return os.Remove(seg.fd.Name())
