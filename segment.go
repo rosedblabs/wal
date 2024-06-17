@@ -97,7 +97,7 @@ func openSegmentFile(dirPath, extName string, id uint32) (*segment, error) {
 	// set the current block number and block size.
 	offset, err := fd.Seek(0, io.SeekEnd)
 	if err != nil {
-		panic(fmt.Errorf("seek to the end of segment file %d%s failed: %v", id, extName, err))
+		return nil, fmt.Errorf("seek to the end of segment file %d%s failed: %v", id, extName, err)
 	}
 
 	// init cached block
@@ -244,8 +244,8 @@ func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteB
 	// the buffer length must be equal to chunkSize+padding length
 	endBufferLen := chunkBuffer.Len()
 	if position.ChunkSize+padding != uint32(endBufferLen-startBufferLen) {
-		panic(fmt.Sprintf("wrong!!! the chunk size %d is not equal to the buffer len %d",
-			position.ChunkSize+padding, endBufferLen-startBufferLen))
+		return nil, fmt.Errorf("wrong!!! the chunk size %d is not equal to the buffer len %d",
+		position.ChunkSize+padding, endBufferLen-startBufferLen)
 	}
 
 	// update segment status
@@ -347,7 +347,7 @@ func (seg *segment) appendChunkBuffer(buf *bytebufferpool.ByteBuffer, data []byt
 // write the pending chunk buffer to the segment file
 func (seg *segment) writeChunkBuffer(buf *bytebufferpool.ByteBuffer) error {
 	if seg.currentBlockSize > blockSize {
-		panic("wrong! can not exceed the block size")
+		return errors.New("the current block size exceeds the maximum block size")
 	}
 
 	// write the data into underlying file
