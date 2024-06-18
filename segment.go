@@ -245,7 +245,7 @@ func (seg *segment) writeToBuffer(data []byte, chunkBuffer *bytebufferpool.ByteB
 	endBufferLen := chunkBuffer.Len()
 	if position.ChunkSize+padding != uint32(endBufferLen-startBufferLen) {
 		return nil, fmt.Errorf("wrong!!! the chunk size %d is not equal to the buffer len %d",
-		position.ChunkSize+padding, endBufferLen-startBufferLen)
+			position.ChunkSize+padding, endBufferLen-startBufferLen)
 	}
 
 	// update segment status
