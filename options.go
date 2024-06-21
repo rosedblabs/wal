@@ -2,6 +2,8 @@ package wal
 
 import "os"
 
+type Option func(*Options)
+
 // Options represents the configuration options for a Write-Ahead Log (WAL).
 type Options struct {
 	// DirPath specifies the directory path where the WAL segment files will be stored.
@@ -44,4 +46,39 @@ var DefaultOptions = Options{
 	SegmentFileExt: ".SEG",
 	Sync:           false,
 	BytesPerSync:   0,
+}
+
+// WithDirPath sets the directory path where the WAL segment files will be stored.
+func WithDirPath(dir string) Option {
+	return func(o *Options) {
+		o.DirPath = dir
+	}
+}
+
+// WithSegmentSize sets the maximum size of each segment file in bytes.
+func WithSegmentSize(size int64) Option {
+	return func(o *Options) {
+		o.SegmentSize = size
+	}
+}
+
+// WithSegmentFileExt sets the file extension of the segment files.
+func WithSegmentFileExt(ext string) Option {
+	return func(o *Options) {
+		o.SegmentFileExt = ext
+	}
+}
+
+// WithSync sets the whether to synchronize writes through os buffer cache and down onto the actual disk.
+func WithSync(sync bool) Option {
+	return func(o *Options) {
+		o.Sync = sync
+	}
+}
+
+// WithBytesPerSync sets the number of bytes to write before calling fsync.
+func WithBytesPerSync(bytesPerSync uint32) Option {
+	return func(o *Options) {
+		o.BytesPerSync = bytesPerSync
+	}
 }

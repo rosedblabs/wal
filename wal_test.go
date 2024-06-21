@@ -1,11 +1,12 @@
 package wal
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func destroyWAL(wal *WAL) {
@@ -17,12 +18,11 @@ func destroyWAL(wal *WAL) {
 
 func TestWAL_WriteALL(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write-batch-1")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
@@ -35,12 +35,11 @@ func TestWAL_WriteALL(t *testing.T) {
 
 func TestWAL_Write(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write1")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
@@ -68,12 +67,11 @@ func TestWAL_Write(t *testing.T) {
 
 func TestWAL_Write_large(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write2")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
@@ -82,12 +80,11 @@ func TestWAL_Write_large(t *testing.T) {
 
 func TestWAL_Write_large2(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-write3")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
@@ -96,12 +93,11 @@ func TestWAL_Write_large2(t *testing.T) {
 
 func TestWAL_OpenNewActiveSegment(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-new-active-segment")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
@@ -119,12 +115,11 @@ func TestWAL_OpenNewActiveSegment(t *testing.T) {
 
 func TestWAL_IsEmpty(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-is-empty")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
@@ -135,12 +130,11 @@ func TestWAL_IsEmpty(t *testing.T) {
 
 func TestWAL_Reader(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-wal-reader")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
@@ -174,7 +168,11 @@ func TestWAL_Reader(t *testing.T) {
 	err = wal.Close()
 	assert.Nil(t, err)
 
-	wal2, err := Open(opts)
+	wal2, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer func() {
 		_ = wal2.Close()
@@ -239,12 +237,11 @@ func testWriteAndIterate(t *testing.T, wal *WAL, size int, valueSize int) {
 
 func TestWAL_Delete(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-delete")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    32 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	testWriteAndIterate(t, wal, 2000, 512)
 	assert.False(t, wal.IsEmpty())
@@ -253,19 +250,22 @@ func TestWAL_Delete(t *testing.T) {
 	err = wal.Delete()
 	assert.Nil(t, err)
 
-	wal, err = Open(opts)
+	wal, err = Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(32*1024*1024),
+	)
 	assert.Nil(t, err)
 	assert.True(t, wal.IsEmpty())
 }
 
 func TestWAL_ReaderWithStart(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-wal-reader-with-start")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".SEG",
-		SegmentSize:    8 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".SEG"),
+		WithSegmentSize(8*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 
@@ -295,12 +295,11 @@ func TestWAL_ReaderWithStart(t *testing.T) {
 
 func TestWAL_RenameFileExt(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "wal-test-rename-ext")
-	opts := Options{
-		DirPath:        dir,
-		SegmentFileExt: ".VLOG.1.temp",
-		SegmentSize:    8 * 1024 * 1024,
-	}
-	wal, err := Open(opts)
+	wal, err := Open(
+		WithDirPath(dir),
+		WithSegmentFileExt(".VLOG.1.temp"),
+		WithSegmentSize(8*1024*1024),
+	)
 	assert.Nil(t, err)
 	defer destroyWAL(wal)
 	testWriteAndIterate(t, wal, 20000, 512)
@@ -311,8 +310,7 @@ func TestWAL_RenameFileExt(t *testing.T) {
 	err = wal.RenameFileExt(".VLOG.1")
 	assert.Nil(t, err)
 
-	opts.SegmentFileExt = ".VLOG.1"
-	wal2, err := Open(opts)
+	wal2, err := Open(WithSegmentFileExt(".VLOG.1"))
 	assert.Nil(t, err)
 	defer func() {
 		_ = wal2.Close()
