@@ -14,12 +14,13 @@ var walFile *wal.WAL
 
 func init() {
 	dir, _ := os.MkdirTemp("", "wal-benchmark-test")
+	opts := wal.Options{
+		DirPath:        dir,
+		SegmentFileExt: ".SEG",
+		SegmentSize:    wal.GB,
+	}
 	var err error
-	walFile, err = wal.Open(
-		wal.WithDirPath(dir),
-		wal.WithSegmentFileExt(".SEG"),
-		wal.WithSegmentSize(wal.GB),
-	)
+	walFile, err = wal.Open(opts)
 	if err != nil {
 		panic(err)
 	}

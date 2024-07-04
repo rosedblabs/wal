@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	walFile, _ := wal.Open()
+	walFile, _ := wal.Open(wal.DefaultOptions)
 	// write some data
 	chunkPosition, _ := walFile.Write([]byte("some data 1"))
 	// read by the position
