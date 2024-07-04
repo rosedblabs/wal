@@ -49,7 +49,7 @@ Payload = Byte stream as long as specified by the payload size
 
 ```go
 func main() {
-	wal, _ := wal.Open()
+	wal, _ := wal.Open(wal.DefaultOptions)
 	// write some data
 	chunkPosition, _ := wal.Write([]byte("some data 1"))
 	// read by the position
