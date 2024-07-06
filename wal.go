@@ -166,6 +166,17 @@ func (wal *WAL) IsEmpty() bool {
 	return len(wal.olderSegments) == 0 && wal.activeSegment.Size() == 0
 }
 
+// SetIsStartupTraversal This is only used if the WAL is during startup traversal.
+// Such as rosedb/lotusdb startup, so it's not a common usage for most users.
+// And notice that if you set it to true, only one reader can read the data from the WAL
+// (Single Thread).
+func (wal *WAL) SetIsStartupTraversal(v bool) {
+	for _, seg := range wal.olderSegments {
+		seg.isStartupTraversal = v
+	}
+	wal.activeSegment.isStartupTraversal = v
+}
+
 // NewReaderWithMax returns a new reader for the WAL,
 // and the reader will only read the data from the segment file
 // whose id is less than or equal to the given segId.
