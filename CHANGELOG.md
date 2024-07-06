@@ -1,3 +1,11 @@
+# Release 1.3.8 (2024-07-06)
+## 🎄 Enhancements
+* fix concurrent read(https://github.com/rosedblabs/wal/commit/4206c62ab8b46223b9fbd030c90219222cf1707f)
+## 🎠 Community
+* thanks to @ghosx
+  * Fix seg.Remove Swallowing Error (https://github.com/rosedblabs/wal/pull/38)
+  * fix panic (https://github.com/rosedblabs/wal/pull/39)
+
 # Release 1.3.7 (2024-06-13)
 
 ## 🎄 Enhancements
