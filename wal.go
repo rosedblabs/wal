@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -40,6 +41,8 @@ type WAL struct {
 	pendingWrites     [][]byte
 	pendingSize       int64
 	pendingWritesLock sync.Mutex
+	closeC            chan struct{}
+	syncTicker        *time.Ticker
 }
 
 // Reader represents a reader for the WAL.
@@ -64,6 +67,7 @@ func Open(options Options) (*WAL, error) {
 		options:       options,
 		olderSegments: make(map[SegmentID]*segment),
 		pendingWrites: make([][]byte, 0),
+		closeC:        make(chan struct{}),
 	}
 
 	// create the directory if not exists.
@@ -115,6 +119,22 @@ func Open(options Options) (*WAL, error) {
 				wal.olderSegments[segment.id] = segment
 			}
 		}
+	}
+
+	// only start the sync operation if the SyncInterval is greater than 0.
+	if wal.options.SyncInterval > 0 {
+		wal.syncTicker = time.NewTicker(wal.options.SyncInterval)
+		go func() {
+			for {
+				select {
+				case <-wal.syncTicker.C:
+					_ = wal.Sync()
+				case <-wal.closeC:
+					wal.syncTicker.Stop()
+					return
+				}
+			}
+		}()
 	}
 
 	return wal, nil
@@ -427,6 +447,13 @@ func (wal *WAL) Read(pos *ChunkPosition) ([]byte, error) {
 func (wal *WAL) Close() error {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
+
+	select {
+	case <-wal.closeC:
+		// channel is already closed
+	default:
+		close(wal.closeC)
+	}
 
 	// close all segment files.
 	for _, segment := range wal.olderSegments {

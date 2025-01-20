@@ -1,6 +1,9 @@
 package wal
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 // Options represents the configuration options for a Write-Ahead Log (WAL).
 type Options struct {
@@ -29,6 +32,10 @@ type Options struct {
 
 	// BytesPerSync specifies the number of bytes to write before calling fsync.
 	BytesPerSync uint32
+
+	// SyncInterval is the time duration in which explicit synchronization is performed.
+	// If SyncInterval is zero, no periodic synchronization is performed.
+	SyncInterval time.Duration
 }
 
 const (
@@ -44,4 +51,5 @@ var DefaultOptions = Options{
 	SegmentFileExt: ".SEG",
 	Sync:           false,
 	BytesPerSync:   0,
+	SyncInterval:   0,
 }

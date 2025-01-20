@@ -1,11 +1,12 @@
 package wal
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func destroyWAL(wal *WAL) {
